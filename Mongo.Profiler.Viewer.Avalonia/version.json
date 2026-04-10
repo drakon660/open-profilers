@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/Nerdbank.GitVersioning/main/src/NerdBank.GitVersioning/version.schema.json",
+  "version": "1.1",
+  "assemblyVersion": {
+    "precision": "build"
+  },
+  "nugetPackageVersion": {
+    "precision": "build"
+  },
+  "publicReleaseRefSpec": [
+    "^refs/heads/master$"
+  ],
+  "versionHeightOffset": -1154,
+  "versionHeightOffsetAppliesTo": "1.0"
+}

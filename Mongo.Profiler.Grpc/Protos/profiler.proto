@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package mongoprofiler.v1;
+
+option csharp_namespace = "Mongo.Profiler.Grpc";
+
+service ProfilerStream {
+  rpc Subscribe(SubscribeRequest) returns (stream ProfilerEvent);
+}
+
+message SubscribeRequest {
+  string client_name = 1;
+  string schema_version = 2;
+}
+
+message ProfilerEvent {
+  string schema_version = 1;
+  string event_id = 2;
+  int64 unix_time_ms = 3;
+  string command_name = 4;
+  string database_name = 5;
+  string collection_name = 6;
+  string query = 7;
+  double duration_ms = 8;
+  bool success = 9;
+  string error_message = 10;
+  string request_id = 11;
+  string trace_id = 12;
+  string span_id = 13;
+  optional int32 result_count = 14;
+  string session_id = 15;
+  optional string server_endpoint = 16;
+  optional string operation_id = 17;
+  optional int32 error_code = 18;
+  optional string error_code_name = 19;
+  repeated string error_labels = 20;
+  optional int64 cursor_id = 21;
+  optional int32 reply_size_bytes = 22;
+  optional int32 command_size_bytes = 23;
+  optional string query_fingerprint = 24;
+  optional string read_preference = 25;
+  optional string read_concern = 26;
+  optional string write_concern = 27;
+  optional int32 max_time_ms = 28;
+  optional bool allow_disk_use = 29;
+  optional string index_advice_status = 30;
+  optional string index_advice_reason = 31;
+  optional int64 explain_docs_examined = 32;
+  optional int64 explain_keys_examined = 33;
+  optional int64 explain_n_returned = 34;
+  optional string winning_plan_summary = 35;
+  optional string execution_plan_xml = 36;
+}

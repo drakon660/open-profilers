@@ -1,0 +1,389 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="760"
+        x:Class="Mongo.Profiler.Viewer.MainWindow"
+        Title="Mongo Profiler (Avalonia)"
+        MinWidth="980"
+        MinHeight="640"
+        SystemDecorations="Full"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="32"
+        Background="#F5F5F5">
+    <Window.Styles>
+        <Style Selector="DataGrid">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="RowBackground" Value="#F0F0F0" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#D5D5D5" />
+            <Setter Property="VerticalGridLinesBrush" Value="#D5D5D5" />
+            <Setter Property="RowHeight" Value="30" />
+            <Setter Property="MinColumnWidth" Value="40" />
+        </Style>
+        <Style Selector="DataGridColumnHeader">
+            <Setter Property="Background" Value="#F0F0F0" />
+            <Setter Property="Foreground" Value="#333333" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <!--
+            Avalonia Fluent theme's DataGridColumnHeader template uses a 3-column Grid:
+            [Auto (left gripper)] [* (content)] [Auto (right gripper)].
+            The Auto gripper columns steal space from the header text, causing it to be
+            clipped prematurely during column resize. Spanning the ContentPresenter across
+            all 3 columns lets the header text use the full column width.
+        -->
+        <Style Selector="DataGridColumnHeader ContentPresenter">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="3" />
+        </Style>
+        <Style Selector="DataGridColumnHeader Thumb#PART_LeftHeaderGripper">
+            <Setter Property="Width" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="DataGridColumnHeader Thumb#PART_RightHeaderGripper">
+            <Setter Property="Width" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="DataGridCell">
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="DataGridCell TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="TextAlignment" Value="Left" />
+        </Style>
+        <Style Selector="DataGridColumnHeader TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="TextAlignment" Value="Left" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="DataGridRow:selected">
+            <Setter Property="Background" Value="#F28C2A" />
+            <Setter Property="Foreground" Value="#1D1D1D" />
+        </Style>
+        <Style Selector="Button.titlebar-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.titlebar-button:pointerover">
+            <Setter Property="Background" Value="#4A4A4A" />
+        </Style>
+        <Style Selector="Button#CloseButton:pointerover">
+            <Setter Property="Background" Value="#C42B1C" />
+        </Style>
+        <Style Selector="Button#UpdateButton">
+            <Setter Property="Background" Value="#C62828" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#9E1F1F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style Selector="Button#UpdateButton:pointerover">
+            <Setter Property="Background" Value="#B71C1C" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0">
+        <Border Grid.Row="0" Background="#353535" Padding="8,4">
+            <Grid ColumnDefinitions="Auto,12,*,Auto,4,Auto,4,Auto,4,Auto,4,Auto">
+                <Border Grid.Column="2"
+                        Background="Transparent"
+                        PointerPressed="TitleBarDragArea_PointerPressed"
+                        DoubleTapped="TitleBarDragArea_DoubleTapped">
+                    <TextBlock x:Name="AppTitleText"
+                               Text="Mongo Profiler (Avalonia)"
+                               Foreground="White"
+                               VerticalAlignment="Center"
+                               Margin="8,0,0,0" />
+                </Border>
+
+                <Button Grid.Column="3" Content="Options" Click="Options_Click" />
+                <Button x:Name="UpdateButton"
+                        Grid.Column="5"
+                        Content="Update"
+                        Click="UpdateNow_Click"
+                        IsVisible="False" />
+
+                <Button x:Name="MinimizeButton" Grid.Column="7" Classes="titlebar-button" Click="Minimize_Click">
+                    <TextBlock Text="-" FontSize="16" FontWeight="SemiBold" LineHeight="16" />
+                </Button>
+                <Button x:Name="MaximizeButton" Grid.Column="9" Classes="titlebar-button" Click="MaxRestore_Click">
+                    <TextBlock Text="□" FontSize="11" FontWeight="SemiBold" LineHeight="11" />
+                </Button>
+                <Button x:Name="CloseButton" Grid.Column="11" Classes="titlebar-button" Click="MenuExit_Click">
+                    <TextBlock Text="×" FontSize="15" FontWeight="SemiBold" LineHeight="15" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Background="#E8762F" Padding="10,8">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,16,110,8,80,12,Auto,8,Auto,8,Auto,12,*">
+                    <TextBlock Grid.Column="0" Text="Mongo Profiler" FontWeight="Bold" FontSize="22" Foreground="White" VerticalAlignment="Center" />
+                    <TextBox x:Name="HostBox" Grid.Column="2" Text="localhost" Watermark="gRPC Host" />
+                    <TextBox x:Name="PortBox" Grid.Column="4" Text="5179" Watermark="gRPC Port" />
+                    <Button Grid.Column="6" Content="Connect" Click="Connect_Click" />
+                    <Button x:Name="DisconnectButton" Grid.Column="8" Content="Disconnect" IsEnabled="False" Click="Disconnect_Click" />
+                    <Button Grid.Column="10" Content="Clear" Click="Clear_Click" />
+                    <TextBlock x:Name="StatusText" Grid.Column="12" Text="Disconnected" Foreground="White" VerticalAlignment="Center"
+                               HorizontalAlignment="Right" FontWeight="SemiBold" />
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,8,Auto,8,220,8,220,8,120,*">
+                    <CheckBox x:Name="DirectProfileModeCheckBox"
+                              Grid.Column="0"
+                              Content="Listen to system.profile"
+                              Foreground="White"
+                              VerticalAlignment="Center"
+                              IsChecked="False"
+                              Checked="DirectProfileModeChanged"
+                              Unchecked="DirectProfileModeChanged" />
+                    <CheckBox x:Name="AutoReconnectCheckBox"
+                              Grid.Column="2"
+                              Content="Auto reconnect"
+                              Foreground="White"
+                              VerticalAlignment="Center"
+                              IsChecked="False"
+                              Checked="AutoReconnectChanged"
+                              Unchecked="AutoReconnectChanged" />
+                    <TextBox x:Name="MongoConnectionStringBox"
+                             Grid.Column="4"
+                             Text="mongodb://localhost:27017"
+                             Watermark="Mongo connection string" />
+                    <TextBox x:Name="MongoDatabaseBox"
+                             Grid.Column="6"
+                             Text="profiler_samples"
+                             Watermark="Mongo database" />
+                    <TextBlock Grid.Column="8"
+                               Text="(dev/test)"
+                               Foreground="White"
+                               VerticalAlignment="Center"
+                               FontStyle="Italic" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2" ColumnDefinitions="250,*" Margin="8">
+            <Grid Grid.Column="0" RowDefinitions="Auto,*,180">
+                <Border Grid.Row="0" Background="#5F395A" Padding="8,6">
+                    <Grid ColumnDefinitions="*,*" HorizontalAlignment="Stretch">
+                        <TextBlock Grid.Column="0" Text="SESSIONS" Foreground="White" FontWeight="Bold" />
+                        <TextBlock Grid.Column="1" Text="ANALYSIS" Foreground="White" FontWeight="Bold" HorizontalAlignment="Right" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1" BorderThickness="1,0,1,1" BorderBrush="#C8C8C8" Background="#ECECEC">
+                    <ListBox>
+                        <ListBoxItem Background="#F28C2A" Foreground="#1F1F1F" FontWeight="Bold">Unique Queries</ListBoxItem>
+                        <ListBoxItem>Expensive Queries</ListBoxItem>
+                        <ListBoxItem>Queries by Isolation Level</ListBoxItem>
+                        <ListBoxItem>Queries By Method</ListBoxItem>
+                        <ListBoxItem>Queries By Table</ListBoxItem>
+                        <ListBoxItem>Queries By Alert</ListBoxItem>
+                        <ListBoxItem>Queries By Url</ListBoxItem>
+                        <ListBoxItem>Overall Usage</ListBoxItem>
+                    </ListBox>
+                </Border>
+
+                <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="0,8,0,0">
+                    <Border Grid.Row="0" Background="#5F395A" Padding="8,6">
+                        <TextBlock Text="Session factory Statistics" Foreground="White" FontWeight="Bold" />
+                    </Border>
+                    <Border Grid.Row="1" BorderThickness="1,0,1,1" BorderBrush="#C8C8C8" Background="#ECECEC" Padding="8">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="NHF-Profiler-SessionFactory" FontWeight="Bold" />
+                            <TextBlock Text="Close Statement Count            0" />
+                            <TextBlock Text="Collection Fetch Count           0" />
+                            <TextBlock Text="Collection Load Count            0" />
+                            <TextBlock Text="Collection Recreate Count        0" />
+                            <TextBlock Text="Collection Remove Count          0" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto,*" Margin="8,0,0,0">
+                <Border Grid.Row="0" Background="#5F395A" Padding="8,6">
+                    <TextBlock Text="UNIQUE QUERIES" Foreground="White" FontWeight="Bold" />
+                </Border>
+
+                <TabControl Grid.Row="1"
+                            Margin="0,0,0,0">
+                    <TabItem Header="gRPC Stream">
+                        <DataGrid x:Name="GrpcEventsGrid"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="False"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  GridLinesVisibility="All"
+                                  SelectionChanged="GrpcEventsGrid_SelectionChanged">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="UNIX TIME MS" Binding="{Binding UnixTimeMsDisplay}" Width="150" />
+                                <DataGridTextColumn Header="QUERY COUNT" Binding="{Binding QueryCount}" Width="120" />
+                                <DataGridTextColumn Header="AVG. DURATION" Binding="{Binding AvgDurationDisplay}" Width="130" />
+                                <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="100" />
+                                <DataGridTextColumn Header="COMMAND" Binding="{Binding CommandName}" Width="120" />
+                                <DataGridTextColumn Header="LAST SERVER" Binding="{Binding ServerEndpoint}" Width="160" />
+                                <DataGridTextColumn Header="SHORT QUERY" Binding="{Binding ShortQuery}" Width="SizeToCells" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+
+                    <TabItem Header="system.profile">
+                        <DataGrid x:Name="ProfileEventsGrid"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="False"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  GridLinesVisibility="All"
+                                  SelectionChanged="ProfileEventsGrid_SelectionChanged">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="DATE" Width="205">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding TsDateTimeDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="APP NAME" Width="150">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding AppNameDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="CLIENT" Width="150">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding ClientDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="OP" Width="90">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding OpDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="DOCS EXAMINED" Width="165">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DocsExaminedDisplay}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="NRETURNED" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding NReturnedDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="COMMAND" Width="SizeToCells">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding CommandDocumentDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                </TabControl>
+
+                <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch"
+                              Background="#D5D5D5" Cursor="SizeNorthSouth" />
+
+                <DockPanel Grid.Row="3">
+                    <Border DockPanel.Dock="Top" Background="#5F395A" Padding="8,6">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="DETAILS" Foreground="White" FontWeight="Bold" />
+                            <Button Grid.Column="1" Content="Copy Query" Click="CopyQuery_Click" />
+                        </Grid>
+                    </Border>
+
+                    <TabControl>
+                    <TabItem Header="Query / Command">
+                        <TextBox x:Name="QueryCommandBox"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas"
+                                 FontSize="13"
+                                 Background="#F7F7F7"
+                                 BorderBrush="#C8C8C8"
+                                 BorderThickness="1" />
+                    </TabItem>
+                    <TabItem Header="Data">
+                        <DataGrid x:Name="DataDetailsGrid"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="False"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  GridLinesVisibility="All">
+                            <DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Copy query_command value"
+                                              Click="CopyQueryCommandValue_Click" />
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="INFO" Binding="{Binding Info}" Width="220" />
+                                <DataGridTextColumn Header="VALUE" Binding="{Binding Value}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </TabItem>
+                    </TabControl>
+                </DockPanel>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="3" Background="#E2E2E2" BorderBrush="#C8C8C8" BorderThickness="1,1,1,0" Padding="8,4">
+            <Grid ColumnDefinitions="Auto,8,*">
+                <TextBlock x:Name="StatusBarLevel"
+                           Grid.Column="0"
+                           Text="INFO"
+                           FontWeight="Bold"
+                           Foreground="#2B6CB0"
+                           VerticalAlignment="Center" />
+                <TextBlock x:Name="StatusBarMessage"
+                           Grid.Column="2"
+                           Text="Ready."
+                           Foreground="#2F2F2F"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

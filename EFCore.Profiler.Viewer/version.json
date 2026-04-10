@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/Nerdbank.GitVersioning/main/src/NerdBank.GitVersioning/version.schema.json",
+  "version": "1.0",
+  "assemblyVersion": {
+    "precision": "build"
+  },
+  "nugetPackageVersion": {
+    "precision": "build"
+  },
+  "publicReleaseRefSpec": [
+    "^refs/heads/master$"
+  ],
+  "pathFilters": [
+    ":/src/Experimental/MongoProfiler/Mongo.Profiler/EFCore.Profiler.Viewer"
+  ]
+}

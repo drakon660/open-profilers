@@ -1,0 +1,13 @@
+<Solution>
+  <Project Path="Mongo.Profile.SamnpleConsoleApp/Mongo.Profile.SamnpleConsoleApp.csproj" />
+  <Project Path="Mongo.Profiler.AspNet/Mongo.Profiler.AspNet.csproj" />
+  <Project Path="Mongo.Profiler.Client/Mongo.Profiler.Client.csproj" />
+  <Project Path="EFCore.Profiler/EFCore.Profiler.csproj" />
+  <Project Path="EFCore.Profiler.Viewer/EFCore.Profiler.Viewer.csproj" />
+  <Project Path="Mongo.Profiler.Grpc/Mongo.Profiler.Grpc.csproj" />
+  <Project Path="Mongo.Profiler.SampleApi/Mongo.Profiler.SampleApi.csproj" />
+  <Project Path="Mongo.Profiler.Samples/Mongo.Profiler.Samples.csproj" />
+  <Project Path="Mongo.Profiler.Tests/Mongo.Profiler.Tests.csproj" />
+  <Project Path="Mongo.Profiler.Viewer.Avalonia/Mongo.Profiler.Viewer.csproj" />
+  <Project Path="Mongo.Profiler/Mongo.Profiler.csproj" />
+</Solution>

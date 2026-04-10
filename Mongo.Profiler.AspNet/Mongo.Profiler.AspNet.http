@@ -1,0 +1,6 @@
+@Mongo.Profiler.AspNet_HostAddress = http://localhost:5084
+
+GET {{Mongo.Profiler.AspNet_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

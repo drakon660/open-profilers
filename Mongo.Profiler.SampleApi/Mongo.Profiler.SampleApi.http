@@ -1,0 +1,36 @@
+@Mongo.Profiler.SampleApi_HostAddress = http://localhost:5146
+
+GET {{Mongo.Profiler.SampleApi_HostAddress}}/api/orders/bad/sql/select-star
+Accept: application/json
+
+###
+
+GET {{Mongo.Profiler.SampleApi_HostAddress}}/api/orders/bad/sql/cartesian-join
+Accept: application/json
+
+###
+
+GET {{Mongo.Profiler.SampleApi_HostAddress}}/api/orders/bad/sql/leading-wildcard-like
+Accept: application/json
+
+###
+
+GET {{Mongo.Profiler.SampleApi_HostAddress}}/api/orders/bad/sql/non-sargable-predicate
+Accept: application/json
+
+###
+
+GET {{Mongo.Profiler.SampleApi_HostAddress}}/api/orders/bad/sql/implicit-conversion-risk
+Accept: application/json
+
+###
+
+POST {{Mongo.Profiler.SampleApi_HostAddress}}/api/orders/bad/sql/missing-where-update
+Accept: application/json
+
+###
+
+POST {{Mongo.Profiler.SampleApi_HostAddress}}/api/orders/bad/sql/missing-where-delete
+Accept: application/json
+
+###
