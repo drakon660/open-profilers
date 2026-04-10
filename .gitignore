@@ -1,0 +1,10 @@
+bin/
+artifacts/
+temp-build/
+obj/
+.vs/
+.vscode/
+.idea/
+codeship.aes
+/*.user
+.DS_Store
