@@ -10,6 +10,5 @@
   "publicReleaseRefSpec": [
     "^refs/heads/master$"
   ],
-  "versionHeightOffset": -1154,
-  "versionHeightOffsetAppliesTo": "1.0"
+  "versionHeightOffset": 0
 }
