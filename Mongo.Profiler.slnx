@@ -8,6 +8,6 @@
   <Project Path="Mongo.Profiler.SampleApi/Mongo.Profiler.SampleApi.csproj" />
   <Project Path="Mongo.Profiler.Samples/Mongo.Profiler.Samples.csproj" />
   <Project Path="Mongo.Profiler.Tests/Mongo.Profiler.Tests.csproj" />
-  <Project Path="Mongo.Profiler.Viewer.Avalonia/Mongo.Profiler.Viewer.csproj" />
+  <Project Path="Mongo.Profiler.Viewer/Mongo.Profiler.Viewer.csproj" />
   <Project Path="Mongo.Profiler/Mongo.Profiler.csproj" />
 </Solution>
