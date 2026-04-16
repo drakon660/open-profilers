@@ -11,6 +11,7 @@ It builds on top of `Mongo.Profiler` and `Mongo.Profiler.Grpc`:
 ## Quick model
 
 - `AddMongoProfiler()` registers the in-process broadcaster and `IMongoProfilerEventSink`.
+- `AddMongoProfilerBroadcaster(...)` registers a caller-owned broadcaster as both the broadcaster and `IMongoProfilerEventSink`.
 - `AddMongoProfilerPublisher(...)` starts a background gRPC relay for worker or console hosts.
 - `MongoProfilerRelay.StartAsync(...)` starts the same relay for plain apps that do not use `HostBuilder`.
 - `UseMongoProfiler(serviceProvider)` is available from `Mongo.Profiler.Client.AspNet` for ASP.NET-style registrations.
@@ -100,6 +101,50 @@ var client = new MongoClient(settings);
 
 This gives the app a background gRPC endpoint for the viewer without requiring the rest of the application to adopt a generic host.
 
+### Relay lifetime with DI
+
+Be careful when passing `relay.Sink` into long-lived DI registrations. The relay handle is disposable and should live for at least as long as anything using its streaming endpoint.
+
+This is safe in a plain app when the relay and the Mongo client share the same outer scope:
+
+```csharp
+await using var relay = await MongoProfilerRelay.StartAsync(options =>
+{
+    options.Port = 5179;
+    options.ListenOnAnyIp = false;
+});
+
+var settings = MongoClientSettings.FromConnectionString(connectionString);
+settings = settings.UseMongoProfiler(relay.Sink);
+
+var client = new MongoClient(settings);
+```
+
+If you are using a custom DI container, prefer registering a long-lived broadcaster and then start the relay over that same broadcaster:
+
+```csharp
+var broadcaster = new MongoProfilerEventChannelBroadcaster();
+
+await using var relay = await MongoProfilerRelay.StartAsync(
+    broadcaster,
+    options =>
+    {
+        options.Port = 5179;
+        options.ListenOnAnyIp = false;
+    });
+
+services.AddMongoProfilerBroadcaster(broadcaster);
+
+services.AddSingleton<IMongoClient>(serviceProvider =>
+{
+    var settings = MongoClientSettings.FromConnectionString(connectionString);
+    settings = settings.UseMongoProfiler(serviceProvider.GetRequiredService<IMongoProfilerEventSink>());
+    return new MongoClient(settings);
+});
+```
+
+This way the container owns the broadcaster it uses, while the relay only hosts the gRPC streaming endpoint on top of it.
+
 ## Apply profiling to `MongoClientSettings`
 
 ### Resolve sink from DI
@@ -184,6 +229,7 @@ Point the viewer to the host and port that expose the gRPC `Subscribe` stream:
 ## Notes on sinks and DI
 
 - `AddMongoProfiler()` registers `MongoProfilerEventChannelBroadcaster` as the default `IMongoProfilerEventSink`.
+- `AddMongoProfilerBroadcaster(...)` registers a specific broadcaster instance that you already own.
 - `AddMongoProfilerPublisher(...)` includes `AddMongoProfiler()` and then hosts the relay.
 - `MongoProfilerRelay.StartAsync(...)` is the non-DI, non-hosted equivalent when the app needs viewer streaming but does not already have a host.
 - The optional `sink` argument on `AddMongoProfilerPublisher(...)` is intended for supplying an existing broadcaster instance that should be shared with the relay host.

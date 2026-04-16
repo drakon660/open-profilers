@@ -20,8 +20,7 @@ public static class MongoProfilerAspNetExtensions
         var profilerOptions = new MongoProfilerRelayHostedServiceOptions();
         configure?.Invoke(profilerOptions);
 
-        builder.Services.AddGrpc();
-        builder.Services.AddMongoProfilerChannel();
+        builder.Services.AddMongoProfilerGrpc();
         if (!profilerOptions.Enabled)
             return builder;
 
@@ -46,19 +45,17 @@ public static class MongoProfilerAspNetExtensions
                 if (!boundPorts.Add(url.Port))
                     continue;
 
-                if (string.Equals(url.Host, "localhost", StringComparison.OrdinalIgnoreCase))
-                    options.ListenLocalhost(url.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http1AndHttp2; });
-                else
-                    options.ListenAnyIP(url.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http1AndHttp2; });
+                MongoProfilerKestrelBindings.BindConfiguredUrl(options, url, HttpProtocols.Http1AndHttp2);
             }
 
             if (boundPorts.Contains(profilerOptions.Port))
                 return;
 
-            if (profilerOptions.ListenOnAnyIp)
-                options.ListenAnyIP(profilerOptions.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
-            else
-                options.ListenLocalhost(profilerOptions.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
+            MongoProfilerKestrelBindings.BindProfilerPort(
+                options,
+                profilerOptions.Port,
+                profilerOptions.ListenOnAnyIp,
+                HttpProtocols.Http2);
         });
 
         return builder;

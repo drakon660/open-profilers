@@ -21,17 +21,7 @@ internal static class MongoProfilerRelayHost
             return null;
 
         var builder = WebApplication.CreateSlimBuilder();
-        builder.WebHost.ConfigureKestrel(serverOptions =>
-        {
-            if (options.ListenOnAnyIp)
-            {
-                serverOptions.ListenAnyIP(options.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
-            }
-            else
-            {
-                serverOptions.ListenLocalhost(options.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
-            }
-        });
+        ConfigureRelayKestrel(builder, options.Port, options.ListenOnAnyIp);
 
         builder.Services.AddMongoProfilerGrpc();
         // The relay web host has its own DI container. Replace default registrations so
@@ -43,5 +33,16 @@ internal static class MongoProfilerRelayHost
         relayApp.MapMongoProfilerChannelSubscriberToGrpcStream();
         await relayApp.StartAsync(cancellationToken);
         return relayApp;
+    }
+
+    private static void ConfigureRelayKestrel(
+        WebApplicationBuilder builder,
+        int port,
+        bool listenOnAnyIp)
+    {
+        builder.WebHost.ConfigureKestrel(serverOptions =>
+        {
+            MongoProfilerKestrelBindings.BindProfilerPort(serverOptions, port, listenOnAnyIp, HttpProtocols.Http2);
+        });
     }
 }

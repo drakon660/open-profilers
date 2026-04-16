@@ -8,12 +8,24 @@ namespace Mongo.Profiler.Client;
 
 public static class MongoProfilerExtensions
 {
-    public static IServiceCollection AddMongoProfiler(this IServiceCollection services)
+    private static IServiceCollection AddMongoProfiler(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<MongoProfilerEventChannelBroadcaster>();
         services.TryAddSingleton<IMongoProfilerEventSink>(provider =>
             provider.GetRequiredService<MongoProfilerEventChannelBroadcaster>());
+        return services;
+    }
+
+    public static IServiceCollection AddMongoProfilerBroadcaster(
+        this IServiceCollection services,
+        MongoProfilerEventChannelBroadcaster broadcaster)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(broadcaster);
+
+        services.AddSingleton(broadcaster);
+        services.AddSingleton<IMongoProfilerEventSink>(broadcaster);
         return services;
     }
 
