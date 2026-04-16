@@ -50,4 +50,5 @@ message ProfilerEvent {
   optional int64 explain_n_returned = 34;
   optional string winning_plan_summary = 35;
   optional string execution_plan_xml = 36;
+  optional string application_name = 37;
 }

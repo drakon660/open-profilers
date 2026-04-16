@@ -24,7 +24,8 @@
       "Bash(dotnet pack *)",
       "Bash(rm -rf /tmp/pack-check-extract)",
       "Bash(mkdir /tmp/pack-check-extract)",
-      "Bash(unzip -q /tmp/pack-check/Mongo.Profiler.Client.1.0.5.nupkg)"
+      "Bash(unzip -q /tmp/pack-check/Mongo.Profiler.Client.1.0.5.nupkg)",
+      "Bash(dotnet tool *)"
     ]
   }
 }

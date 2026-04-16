@@ -75,6 +75,8 @@ public sealed class ProfilerStreamService : ProfilerStream.ProfilerStreamBase
             result.WinningPlanSummary = queryEvent.WinningPlanSummary;
         if (!string.IsNullOrWhiteSpace(queryEvent.ExecutionPlanXml))
             result.ExecutionPlanXml = queryEvent.ExecutionPlanXml;
+        if (!string.IsNullOrWhiteSpace(queryEvent.ApplicationName))
+            result.ApplicationName = queryEvent.ApplicationName;
 
         if (queryEvent.ResultCount.HasValue)
             result.ResultCount = queryEvent.ResultCount.Value;

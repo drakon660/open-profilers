@@ -36,9 +36,18 @@ Console.WriteLine("Subscriber connected. Running sample query.");
 
 var client = host.Services.GetRequiredService<IMongoClient>();
 var orders = client.GetDatabase(options.DatabaseName).GetCollection<BsonDocument>(options.CollectionName);
-var count = await orders.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
 
-Console.WriteLine($"Collection '{options.DatabaseName}.{options.CollectionName}' count: {count}.");
+try
+{
+    var count = await orders.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
+    Console.WriteLine($"Collection '{options.DatabaseName}.{options.CollectionName}' count: {count}.");
+}
+catch (Exception exception)
+{
+    Console.WriteLine($"Sample query failed: {exception.GetType().Name}: {exception.Message}");
+    Console.WriteLine("Relay is still running — check the viewer for connectivity events.");
+}
+
 Console.WriteLine("Press any key to stop...");
 Console.ReadKey();
 

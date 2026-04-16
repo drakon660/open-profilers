@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Events;
 
 namespace Mongo.Profiler;
@@ -21,14 +23,23 @@ public static class MongoClientSettingsExtensions
         ArgumentNullException.ThrowIfNull(settings);
         options ??= new MongoProfilerOptions();
         var redaction = BuildRedactionConfig(options.Redaction);
+        var applicationName = string.IsNullOrWhiteSpace(options.ApplicationName)
+            ? Assembly.GetEntryAssembly()?.GetName().Name ?? string.Empty
+            : options.ApplicationName;
 
         var existingClusterConfigurator = settings.ClusterConfigurator;
         var commandByRequestId = new ConcurrentDictionary<int, CommandEnvelope>();
         var indexAdvisor = MongoIndexAdvisor.Create(settings, options.IndexAdvisor, logger);
+        var lastHeartbeatFailureByEndpoint = new ConcurrentDictionary<string, DateTimeOffset>();
+        var heartbeatDebounce = TimeSpan.FromSeconds(10);
+        var lastConnectionFailureByEndpoint = new ConcurrentDictionary<string, DateTimeOffset>();
+        var connectionFailureDebounce = TimeSpan.FromSeconds(10);
 
         settings.ClusterConfigurator = clusterBuilder =>
         {
             existingClusterConfigurator?.Invoke(clusterBuilder);
+
+            PublishHeartbeatEvent(sink, applicationName, "profiler", "profiler attached", logger, success: true);
 
             clusterBuilder.Subscribe<CommandStartedEvent>(commandStartedEvent =>
             {
@@ -68,7 +79,7 @@ public static class MongoClientSettingsExtensions
                 var outcome = ExtractSucceededOutcome(commandSucceededEvent.CommandName, commandSucceededEvent.Reply);
                 var advice = indexAdvisor?.Analyze(commandEnvelope, commandSucceededEvent.CommandName, commandSucceededEvent.Duration)
                              ?? IndexAdvice.None;
-                PublishEvent(sink, commandEnvelope, commandSucceededEvent.CommandName, commandSucceededEvent.RequestId,
+                PublishEvent(sink, applicationName, commandEnvelope, commandSucceededEvent.CommandName, commandSucceededEvent.RequestId,
                     commandSucceededEvent.Duration, true, null, outcome, advice);
             });
 
@@ -81,73 +92,60 @@ public static class MongoClientSettingsExtensions
                 WriteQueryLog(logger, commandEnvelope.Query, commandFailedEvent.CommandName, commandFailedEvent.Duration, error);
                 var outcome = ExtractFailedOutcome(commandFailedEvent.Failure);
                 var advice = IndexAdvice.None;
-                PublishEvent(sink, commandEnvelope, commandFailedEvent.CommandName, commandFailedEvent.RequestId,
+                PublishEvent(sink, applicationName, commandEnvelope, commandFailedEvent.CommandName, commandFailedEvent.RequestId,
                     commandFailedEvent.Duration, false, error, outcome, advice);
             });
-        };
-
-        return settings;
-    }
-    
-    public static MongoClientSettings SubscribeToMongoQueries(
-        this MongoClientSettings settings,
-        ILogger? logger = null)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        var options = new MongoProfilerOptions();
-        var redaction = BuildRedactionConfig(options.Redaction);
-
-        var existingClusterConfigurator = settings.ClusterConfigurator;
-        var commandByRequestId = new ConcurrentDictionary<int, CommandEnvelope>();
-
-        settings.ClusterConfigurator = clusterBuilder =>
-        {
-            existingClusterConfigurator?.Invoke(clusterBuilder);
-
-            clusterBuilder.Subscribe<CommandStartedEvent>(commandStartedEvent =>
+            
+            clusterBuilder.Subscribe<ClusterDescriptionChangedEvent>(changedEvent =>
             {
-                if (ShouldSkipCommand(commandStartedEvent.CommandName, commandStartedEvent.Command))
+                var oldDescription = changedEvent.OldDescription;
+                var newDescription = changedEvent.NewDescription;
+                if (oldDescription.State == newDescription.State && oldDescription.Type == newDescription.Type)
                     return;
 
-                var sanitizedCommand = RedactAndTruncate(commandStartedEvent.Command, redaction);
-                var query = MongoCommandQueryBuilder.Build(commandStartedEvent.CommandName, sanitizedCommand);
-                if (!string.IsNullOrWhiteSpace(query))
-                {
-                    commandByRequestId[commandStartedEvent.RequestId] = new CommandEnvelope(
-                        query,
-                        BuildQueryFingerprint(commandStartedEvent.CommandName, commandStartedEvent.Command),
-                        GetDatabaseName(commandStartedEvent.Command),
-                        GetCollectionName(commandStartedEvent.CommandName, commandStartedEvent.Command),
-                        GetSessionId(commandStartedEvent.Command),
-                        GetServerEndpoint(commandStartedEvent),
-                        commandStartedEvent.OperationId?.ToString() ?? string.Empty,
-                        GetStringifiedValue(commandStartedEvent.Command, "$readPreference", redaction.MaxStringLength),
-                        GetStringifiedValue(commandStartedEvent.Command, "readConcern", redaction.MaxStringLength),
-                        GetStringifiedValue(commandStartedEvent.Command, "writeConcern", redaction.MaxStringLength),
-                        ConvertToIntOrNull(commandStartedEvent.Command, "maxTimeMS"),
-                        ConvertToBoolOrNull(commandStartedEvent.Command, "allowDiskUse"),
-                        CalculateBsonSize(commandStartedEvent.Command),
-                        commandStartedEvent.Command.DeepClone().AsBsonDocument,
-                        Activity.Current?.TraceId.ToString() ?? string.Empty,
-                        Activity.Current?.SpanId.ToString() ?? string.Empty);
-                }
+                PublishConnectivityEvent(sink, applicationName, oldDescription, newDescription, logger);
+            });
+            
+            clusterBuilder.Subscribe<ServerHeartbeatFailedEvent>(heartbeatFailedEvent =>
+            {
+                var endpoint = heartbeatFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
+                var now = DateTimeOffset.UtcNow;
+                if (lastHeartbeatFailureByEndpoint.TryGetValue(endpoint, out var last) && now - last < heartbeatDebounce)
+                    return;
+
+                lastHeartbeatFailureByEndpoint[endpoint] = now;
+                PublishHeartbeatEvent(
+                    sink,
+                    applicationName,
+                    endpoint,
+                    heartbeatFailedEvent.Exception?.Message ?? "heartbeat failed",
+                    logger,
+                    success: false);
             });
 
-            clusterBuilder.Subscribe<CommandSucceededEvent>(commandSucceededEvent =>
+            clusterBuilder.Subscribe<ServerHeartbeatSucceededEvent>(heartbeatSucceededEvent =>
             {
-                if (!commandByRequestId.TryRemove(commandSucceededEvent.RequestId, out var commandEnvelope))
+                var endpoint = heartbeatSucceededEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
+                if (!lastHeartbeatFailureByEndpoint.TryRemove(endpoint, out _))
                     return;
 
-                WriteQueryLog(logger, commandEnvelope.Query, commandSucceededEvent.CommandName, commandSucceededEvent.Duration, null);
+                PublishHeartbeatEvent(sink, applicationName, endpoint, null, logger, success: true);
             });
 
-            clusterBuilder.Subscribe<CommandFailedEvent>(commandFailedEvent =>
+            clusterBuilder.Subscribe<ConnectionOpeningFailedEvent>(connectionOpeningFailedEvent =>
             {
-                if (!commandByRequestId.TryRemove(commandFailedEvent.RequestId, out var commandEnvelope))
+                var endpoint = connectionOpeningFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
+                var now = DateTimeOffset.UtcNow;
+                if (lastConnectionFailureByEndpoint.TryGetValue(endpoint, out var last) && now - last < connectionFailureDebounce)
                     return;
 
-                var error = commandFailedEvent.Failure?.Message;
-                WriteQueryLog(logger, commandEnvelope.Query, commandFailedEvent.CommandName, commandFailedEvent.Duration, error);
+                lastConnectionFailureByEndpoint[endpoint] = now;
+                PublishConnectionOpeningFailedEvent(
+                    sink,
+                    applicationName,
+                    endpoint,
+                    connectionOpeningFailedEvent.Exception?.Message ?? "connection opening failed",
+                    logger);
             });
         };
 
@@ -156,6 +154,7 @@ public static class MongoClientSettingsExtensions
 
     private static void PublishEvent(
         IMongoProfilerEventSink? sink,
+        string applicationName,
         CommandEnvelope commandEnvelope,
         string commandName,
         int requestId,
@@ -172,6 +171,7 @@ public static class MongoClientSettingsExtensions
         {
             sink.Publish(new MongoProfilerQueryEvent
             {
+                ApplicationName = applicationName,
                 CommandName = commandName,
                 DatabaseName = commandEnvelope.DatabaseName,
                 CollectionName = commandEnvelope.CollectionName,
@@ -209,6 +209,136 @@ public static class MongoClientSettingsExtensions
         catch
         {
             // Event publishing must never affect application execution.
+        }
+    }
+
+    private static void PublishConnectivityEvent(
+        IMongoProfilerEventSink? sink,
+        string applicationName,
+        ClusterDescription oldDescription,
+        ClusterDescription newDescription,
+        ILogger? logger)
+    {
+        var endpoints = string.Join(",", newDescription.Servers.Select(server => server.EndPoint?.ToString() ?? string.Empty));
+        var heartbeatError = newDescription.Servers
+            .Select(server => server.HeartbeatException?.Message)
+            .FirstOrDefault(message => !string.IsNullOrWhiteSpace(message));
+
+        var success = newDescription.State == ClusterState.Connected;
+        var transition = $"cluster {oldDescription.State} -> {newDescription.State} ({newDescription.Type})";
+        var errorMessage = success ? null : heartbeatError ?? "cluster disconnected";
+
+        if (logger is not null)
+        {
+            if (success)
+                logger.LogInformation("Mongo connectivity change: {Transition}.", transition);
+            else
+                logger.LogWarning("Mongo connectivity change: {Transition}. {Error}", transition, errorMessage);
+        }
+
+        if (sink is null)
+            return;
+
+        try
+        {
+            sink.Publish(new MongoProfilerQueryEvent
+            {
+                ApplicationName = applicationName,
+                CommandName = "connectivity",
+                DatabaseName = string.Empty,
+                CollectionName = string.Empty,
+                Query = transition,
+                DurationMs = 0,
+                Success = success,
+                ErrorMessage = errorMessage,
+                ServerEndpoint = endpoints,
+                QueryFingerprint = "SYSTEM:CONNECTIVITY"
+            });
+        }
+        catch
+        {
+            // Connectivity diagnostics must never affect application execution.
+        }
+    }
+
+    private static void PublishConnectionOpeningFailedEvent(
+        IMongoProfilerEventSink? sink,
+        string applicationName,
+        string endpoint,
+        string error,
+        ILogger? logger)
+    {
+        var message = $"connection opening failed for {endpoint}";
+
+        logger?.LogWarning("Mongo {Message}. {Error}", message, error);
+
+        if (sink is null)
+            return;
+
+        try
+        {
+            sink.Publish(new MongoProfilerQueryEvent
+            {
+                ApplicationName = applicationName,
+                CommandName = "connectivity",
+                DatabaseName = string.Empty,
+                CollectionName = string.Empty,
+                Query = message,
+                DurationMs = 0,
+                Success = false,
+                ErrorMessage = error,
+                ServerEndpoint = endpoint,
+                QueryFingerprint = "SYSTEM:CONNECTIVITY"
+            });
+        }
+        catch
+        {
+            // Connectivity diagnostics must never affect application execution.
+        }
+    }
+
+    private static void PublishHeartbeatEvent(
+        IMongoProfilerEventSink? sink,
+        string applicationName,
+        string endpoint,
+        string? error,
+        ILogger? logger,
+        bool success)
+    {
+        var message = success
+            ? $"heartbeat recovered for {endpoint}"
+            : $"heartbeat failed for {endpoint}";
+
+        if (logger is not null)
+        {
+            if (success)
+                logger.LogInformation("Mongo {Message}.", message);
+            else
+                logger.LogWarning("Mongo {Message}. {Error}", message, error ?? string.Empty);
+        }
+
+        if (sink is null)
+            return;
+
+        try
+        {
+            sink.Publish(new MongoProfilerQueryEvent
+            {
+                ApplicationName = applicationName,
+                CommandName = "connectivity",
+                DatabaseName = string.Empty,
+                CollectionName = string.Empty,
+                Query = message,
+                DurationMs = 0,
+                Success = success,
+                ErrorMessage = success ? null : error,
+                ServerEndpoint = endpoint,
+                QueryFingerprint = "SYSTEM:CONNECTIVITY"
+            });
+        }
+        catch
+        {
+            // Connectivity diagnostics must never affect application execution.
         }
     }
 
@@ -538,24 +668,6 @@ public static class MongoClientSettingsExtensions
             : $"{value[..maxStringLength]}...[truncated]";
     }
 
-    private sealed record CommandEnvelope(
-        string Query,
-        string QueryFingerprint,
-        string DatabaseName,
-        string CollectionName,
-        string SessionId,
-        string ServerEndpoint,
-        string OperationId,
-        string ReadPreference,
-        string ReadConcern,
-        string WriteConcern,
-        int? MaxTimeMs,
-        bool? AllowDiskUse,
-        int? CommandSizeBytes,
-        BsonDocument OriginalCommand,
-        string TraceId,
-        string SpanId);
-
     private sealed record CommandOutcome(
         int? ResultCount,
         long? CursorId,
@@ -568,234 +680,4 @@ public static class MongoClientSettingsExtensions
     }
 
     private sealed record RedactionConfig(int MaxStringLength, HashSet<string> SensitiveKeys);
-
-    private sealed record IndexAdvice(
-        string Status,
-        string Reason,
-        long? DocsExamined,
-        long? KeysExamined,
-        long? NReturned,
-        string WinningPlanSummary)
-    {
-        public static readonly IndexAdvice None = new(string.Empty, string.Empty, null, null, null, string.Empty);
-    }
-
-    private sealed class MongoIndexAdvisor
-    {
-        public const string AdvisorComment = "mongo-profiler-index-advisor";
-
-        private readonly IMongoClient _client;
-        private readonly MongoProfilerIndexAdvisorOptions _options;
-        private readonly ILogger? _logger;
-        private readonly ConcurrentDictionary<string, DateTimeOffset> _lastAnalysisByFingerprint = new(StringComparer.Ordinal);
-        private DateTimeOffset _suspendUntilUtc;
-
-        private MongoIndexAdvisor(IMongoClient client, MongoProfilerIndexAdvisorOptions options, ILogger? logger)
-        {
-            _client = client;
-            _options = options;
-            _logger = logger;
-        }
-
-        public static MongoIndexAdvisor? Create(
-            MongoClientSettings settings,
-            MongoProfilerIndexAdvisorOptions options,
-            ILogger? logger)
-        {
-            if (!options.Enabled)
-                return null;
-
-            try
-            {
-                var advisorSettings = settings.Clone();
-                advisorSettings.ClusterConfigurator = null;
-                advisorSettings.ServerSelectionTimeout = TimeSpan.FromMilliseconds(Math.Clamp(options.ExplainTimeoutMs, 250, 5_000));
-                var client = new MongoClient(advisorSettings);
-                return new MongoIndexAdvisor(client, options, logger);
-            }
-            catch (Exception exception)
-            {
-                logger?.LogWarning(exception, "Mongo index advisor initialization failed.");
-                return null;
-            }
-        }
-
-        public IndexAdvice Analyze(CommandEnvelope envelope, string commandName, TimeSpan duration)
-        {
-            if (!ShouldAnalyze(commandName, duration, envelope.QueryFingerprint))
-                return IndexAdvice.None;
-
-            try
-            {
-                var explain = BuildExplainCommand(envelope.OriginalCommand);
-                var database = _client.GetDatabase(envelope.DatabaseName);
-                using var timeoutSource = new CancellationTokenSource(_options.ExplainTimeoutMs);
-                var response = database.RunCommand<BsonDocument>(explain, cancellationToken: timeoutSource.Token);
-                return BuildAdviceFromExplain(response);
-            }
-            catch (OperationCanceledException)
-            {
-                SuspendAnalysisFor(TimeSpan.FromSeconds(10));
-                return new IndexAdvice("analysis_timeout", "explain timed out", null, null, null, string.Empty);
-            }
-            catch (TimeoutException timeoutException)
-            {
-                SuspendAnalysisFor(TimeSpan.FromSeconds(15));
-                return new IndexAdvice("analysis_failed", timeoutException.Message, null, null, null, string.Empty);
-            }
-            catch (MongoConnectionException connectionException)
-            {
-                SuspendAnalysisFor(TimeSpan.FromSeconds(15));
-                return new IndexAdvice("analysis_failed", connectionException.Message, null, null, null, string.Empty);
-            }
-            catch (Exception exception)
-            {
-                _logger?.LogDebug(exception, "Mongo index advisor analysis failed.");
-                return new IndexAdvice("analysis_failed", exception.Message, null, null, null, string.Empty);
-            }
-        }
-
-        private bool ShouldAnalyze(string commandName, TimeSpan duration, string queryFingerprint)
-        {
-            if (commandName is not ("find" or "aggregate"))
-                return false;
-
-            if (duration.TotalMilliseconds < _options.SlowQueryThresholdMs)
-                return false;
-
-            if (string.IsNullOrWhiteSpace(queryFingerprint))
-                return false;
-
-            var now = DateTimeOffset.UtcNow;
-            if (now < _suspendUntilUtc)
-                return false;
-
-            if (_lastAnalysisByFingerprint.TryGetValue(queryFingerprint, out var lastAnalysisUtc))
-            {
-                var minInterval = TimeSpan.FromMinutes(1d / Math.Max(1, _options.MaxAnalysesPerFingerprintPerMinute));
-                if (now - lastAnalysisUtc < minInterval)
-                    return false;
-            }
-
-            _lastAnalysisByFingerprint[queryFingerprint] = now;
-            return true;
-        }
-
-        private void SuspendAnalysisFor(TimeSpan duration)
-        {
-            var next = DateTimeOffset.UtcNow.Add(duration);
-            if (next > _suspendUntilUtc)
-                _suspendUntilUtc = next;
-        }
-
-        private static BsonDocument BuildExplainCommand(BsonDocument originalCommand)
-        {
-            var explainableCommand = originalCommand.DeepClone().AsBsonDocument;
-            explainableCommand.Remove("$db");
-            explainableCommand.Remove("lsid");
-            explainableCommand.Remove("$clusterTime");
-            explainableCommand.Remove("$readPreference");
-            explainableCommand["comment"] = AdvisorComment;
-
-            return new BsonDocument
-            {
-                { "explain", explainableCommand },
-                { "verbosity", "executionStats" },
-                { "comment", AdvisorComment }
-            };
-        }
-
-        private IndexAdvice BuildAdviceFromExplain(BsonDocument explain)
-        {
-            var docsExamined = ReadLong(explain, "executionStats.totalDocsExamined");
-            var keysExamined = ReadLong(explain, "executionStats.totalKeysExamined");
-            var nReturned = ReadLong(explain, "executionStats.nReturned");
-            var hasCollectionScan = ContainsStage(explain, "COLLSCAN");
-            var hasIndexScan = ContainsStage(explain, "IXSCAN");
-            var winningPlanSummary = hasCollectionScan ? "COLLSCAN" : hasIndexScan ? "IXSCAN" : "UNKNOWN";
-
-            if (hasCollectionScan && docsExamined.HasValue && docsExamined.Value >= _options.MinDocsExaminedForWarning)
-            {
-                return new IndexAdvice(
-                    "possible_missing_index",
-                    "collection scan with high documents examined",
-                    docsExamined,
-                    keysExamined,
-                    nReturned,
-                    winningPlanSummary);
-            }
-
-            if (docsExamined.HasValue && nReturned.HasValue)
-            {
-                var docsToReturnThreshold = Math.Max(50L, nReturned.Value * 20L);
-                if (docsExamined.Value > docsToReturnThreshold && keysExamined.GetValueOrDefault() == 0)
-                {
-                    return new IndexAdvice(
-                        "possible_missing_index",
-                        "many documents examined compared to rows returned",
-                        docsExamined,
-                        keysExamined,
-                        nReturned,
-                        winningPlanSummary);
-                }
-            }
-
-            return new IndexAdvice(
-                "ok",
-                hasIndexScan ? "index scan observed" : "no obvious index issue",
-                docsExamined,
-                keysExamined,
-                nReturned,
-                winningPlanSummary);
-        }
-
-        private static bool ContainsStage(BsonValue value, string stageName)
-        {
-            if (value.BsonType == BsonType.Document)
-            {
-                var document = value.AsBsonDocument;
-                if (document.TryGetValue("stage", out var stage) &&
-                    stage.BsonType == BsonType.String &&
-                    string.Equals(stage.AsString, stageName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-
-                foreach (var element in document)
-                {
-                    if (ContainsStage(element.Value, stageName))
-                        return true;
-                }
-            }
-            else if (value.BsonType == BsonType.Array)
-            {
-                foreach (var item in value.AsBsonArray)
-                {
-                    if (ContainsStage(item, stageName))
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static long? ReadLong(BsonDocument source, string dottedPath)
-        {
-            var current = (BsonValue)source;
-            foreach (var segment in dottedPath.Split('.'))
-            {
-                if (current.BsonType != BsonType.Document || !current.AsBsonDocument.TryGetValue(segment, out current))
-                    return null;
-            }
-
-            return current.BsonType switch
-            {
-                BsonType.Int32 => current.AsInt32,
-                BsonType.Int64 => current.AsInt64,
-                BsonType.Double => (long)current.AsDouble,
-                BsonType.Decimal128 => (long)current.AsDecimal128,
-                _ => null
-            };
-        }
-    }
 }

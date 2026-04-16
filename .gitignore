@@ -1,6 +1,7 @@
 bin/
 artifacts/
 temp-build/
+reports/
 obj/
 .vs/
 .vscode/

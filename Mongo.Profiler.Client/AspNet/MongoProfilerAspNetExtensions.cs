@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Microsoft.AspNetCore.Routing;
 using Mongo.Profiler.Grpc;
@@ -69,7 +70,12 @@ public static class MongoProfilerAspNetExtensions
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(serviceProvider);
         var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
-        return settings.SubscribeToMongoQueries(logger, sink);
+        var relayOptions = serviceProvider.GetService<IOptions<MongoProfilerRelayHostedServiceOptions>>()?.Value;
+        var profilerOptions = new MongoProfilerOptions
+        {
+            ApplicationName = relayOptions?.ApplicationName ?? string.Empty
+        };
+        return settings.SubscribeToMongoQueries(logger, sink, profilerOptions);
     }
 
     public static IEndpointRouteBuilder MapMongoProfiler(this IEndpointRouteBuilder endpoints)

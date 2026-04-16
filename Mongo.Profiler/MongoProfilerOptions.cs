@@ -2,6 +2,7 @@ namespace Mongo.Profiler;
 
 public sealed class MongoProfilerOptions
 {
+    public string ApplicationName { get; init; } = string.Empty;
     public MongoProfilerIndexAdvisorOptions IndexAdvisor { get; init; } = new();
     public MongoProfilerRedactionOptions Redaction { get; init; } = new();
 }

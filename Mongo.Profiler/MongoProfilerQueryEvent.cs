@@ -6,6 +6,7 @@ public sealed class MongoProfilerQueryEvent
     public string EventId { get; init; } = Guid.NewGuid().ToString("n");
     public long UnixTimeMs { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+    public string ApplicationName { get; init; } = string.Empty;
     public string CommandName { get; init; } = string.Empty;
     public string DatabaseName { get; init; } = string.Empty;
     public string CollectionName { get; init; } = string.Empty;
