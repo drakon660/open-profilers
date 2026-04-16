@@ -100,5 +100,4 @@ public sealed class ProfilerStreamService : ProfilerStream.ProfilerStreamBase
 
         return result;
     }
-
 }

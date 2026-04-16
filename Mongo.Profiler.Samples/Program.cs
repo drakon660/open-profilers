@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json; 
 using Mongo.Profiler;
-using Mongo.Profiler.Client.Console;
+using Mongo.Profiler.Client;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
 using Serilog;

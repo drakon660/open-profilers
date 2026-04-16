@@ -1,11 +1,7 @@
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Mongo.Profiler.Grpc;
 
 namespace Mongo.Profiler.Client;
 
@@ -26,32 +22,8 @@ internal sealed class MongoProfilerGrpcRelayHostedService : IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var options = _options.Value;
-        if (!options.Enabled)
-            return;
-
-        var builder = WebApplication.CreateSlimBuilder();
-        builder.WebHost.ConfigureKestrel(serverOptions =>
-        {
-            if (options.ListenOnAnyIp)
-            {
-                serverOptions.ListenAnyIP(options.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
-            }
-            else
-            {
-                serverOptions.ListenLocalhost(options.Port, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; });
-            }
-        });
-
         var broadcaster = _serviceProvider.GetRequiredService<MongoProfilerEventChannelBroadcaster>();
-        builder.Services.AddMongoProfilerGrpc();
-        // The relay web host has its own DI container. Replace default registrations so
-        // the gRPC subscriber and the producer app share the same broadcaster instance.
-        builder.Services.Replace(ServiceDescriptor.Singleton<MongoProfilerEventChannelBroadcaster>(broadcaster));
-        builder.Services.Replace(ServiceDescriptor.Singleton<IMongoProfilerEventSink>(broadcaster));
-
-        _relayApp = builder.Build();
-        _relayApp.MapMongoProfilerChannelSubscriberToGrpcStream();
-        await _relayApp.StartAsync(cancellationToken);
+        _relayApp = await MongoProfilerRelayHost.StartAsync(broadcaster, options, cancellationToken);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

@@ -1,24 +1,37 @@
 # Mongo.Profiler.Client
 
-`Mongo.Profiler.Client` is a thin integration layer for any .NET app.
+`Mongo.Profiler.Client` is the app-side integration layer for wiring Mongo query profiling into .NET hosts.
 
-It reuses `Mongo.Profiler.Grpc` directly (no separate relay implementation in this project).
+It builds on top of `Mongo.Profiler` and `Mongo.Profiler.Grpc`:
+
+- register an in-process event broadcaster in DI
+- optionally host a gRPC relay for desktop viewer subscribers
+- apply profiling to `MongoClientSettings`
 
 ## Quick model
 
-- `AddMongoProfiler()` registers profiler relay services in DI.
-- `UseMongoProfiler(serviceProvider)` or `UseMongoProfiler(sink)` is applied while creating `MongoClientSettings`.
-- `MapMongoProfiler()` is required only when your ASP.NET app should expose gRPC subscription endpoint itself.
-- `AddMongoProfilerBridge(...)` starts relay in a background hosted service and optionally links an external sink.
+- `AddMongoProfiler()` registers the in-process broadcaster and `IMongoProfilerEventSink`.
+- `AddMongoProfilerPublisher(...)` starts a background gRPC relay for worker or console hosts.
+- `MongoProfilerRelay.StartAsync(...)` starts the same relay for plain apps that do not use `HostBuilder`.
+- `UseMongoProfiler(serviceProvider)` is available from `Mongo.Profiler.Client.AspNet` for ASP.NET-style registrations.
+- `UseMongoProfiler(sink, logger)` applies profiling to `MongoClientSettings` with an explicit sink.
+- `UseMongoProfiler(logger)` applies profiling for logging-only scenarios.
+- `MapMongoProfiler()` is only needed in ASP.NET apps that expose the gRPC subscription endpoint themselves.
 
-## 1. Register services (ASP.NET Core app)
+## ASP.NET Core app
 
 ```csharp
-using Mongo.Profiler.Client;
+using Mongo.Profiler.Client.AspNet;
+using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddMongoProfiler();
+builder.AddMongoProfiler(options =>
+{
+    options.Port = 5179;
+    options.ListenOnAnyIp = false;
+});
+
 builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
 {
     var settings = MongoClientSettings.FromConnectionString("mongodb://localhost:27017");
@@ -32,7 +45,9 @@ var app = builder.Build();
 app.MapMongoProfiler();
 ```
 
-## 1b. Register hosted relay (worker/batch app)
+`builder.AddMongoProfiler(...)` configures the broadcaster and the ASP.NET-hosted gRPC endpoint. It also adds gRPC services and, unless Kestrel endpoints are already explicitly configured, binds the profiler port for HTTP/2.
+
+## Worker, service, or console host
 
 For non-web hosts (for example `Host.CreateApplicationBuilder()` workers), run relay as hosted service:
 
@@ -41,7 +56,7 @@ using Mongo.Profiler.Client;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddMongoProfilerBridge(options =>
+builder.Services.AddMongoProfilerPublisher(options =>
 {
     options.Port = 5179;
     options.ListenOnAnyIp = false; // true for container/remote access
@@ -49,12 +64,13 @@ builder.Services.AddMongoProfilerBridge(options =>
 builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
 {
     var settings = MongoClientSettings.FromConnectionString("mongodb://localhost:27017");
-    settings = settings.UseMongoProfiler(serviceProvider);
+    var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
+    settings = settings.UseMongoProfiler(sink);
     return new MongoClient(settings);
 });
 ```
 
-This starts gRPC relay in background and exposes `Subscribe` for viewer clients.
+This starts a lightweight gRPC relay in the background and exposes `Subscribe` for viewer clients.
 In this mode, do not call `MapMongoProfiler()`.
 
 Optionally wait until viewer connects before executing workload:
@@ -63,10 +79,33 @@ Optionally wait until viewer connects before executing workload:
 await host.Services.WaitForMongoProfilerSubscriberAsync();
 ```
 
-## 2. Connect profiler to MongoDB client
+## Plain app without `HostBuilder`
+
+If the app does not use `HostBuilder` or ASP.NET hosting, start the relay explicitly and use the returned sink when creating `MongoClientSettings`:
 
 ```csharp
-using Mongo.Profiler.Client;
+await using var relay = await MongoProfilerRelay.StartAsync(options =>
+{
+    options.Port = 5179;
+    options.ListenOnAnyIp = false;
+});
+
+await relay.WaitForMongoProfilerSubscriberAsync();
+
+var settings = MongoClientSettings.FromConnectionString(connectionString);
+settings = settings.UseMongoProfiler(relay.Sink);
+
+var client = new MongoClient(settings);
+```
+
+This gives the app a background gRPC endpoint for the viewer without requiring the rest of the application to adopt a generic host.
+
+## Apply profiling to `MongoClientSettings`
+
+### Resolve sink from DI
+
+```csharp
+using Mongo.Profiler.Client.AspNet;
 using MongoDB.Driver;
 
 builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
@@ -79,40 +118,88 @@ builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
 var client = app.Services.GetRequiredService<IMongoClient>();
 ```
 
-If your registration callback does not expose `IServiceProvider`:
+### Pass the sink explicitly
 
 ```csharp
-IMongoProfilerEventSink GetProfilerSink() => factory.GetInstance<IMongoProfilerEventSink>();
+var broadcaster = new MongoProfilerEventChannelBroadcaster();
 
-factory.Register(config =>
-{
-    var settings = MongoClientSettings.FromConnectionString("mongodb://localhost:27017");
-    settings = settings.UseMongoProfiler(GetProfilerSink());
-    return new MongoClient(settings);
-});
+var settings = MongoClientSettings.FromConnectionString("mongodb://localhost:27017");
+settings = settings.UseMongoProfiler(broadcaster);
+
+var client = new MongoClient(settings);
 ```
 
-Every captured command is published to the in-process `ProfilerEventBroadcaster` from `Mongo.Profiler.Grpc`.
+### Other DI
 
-If your Mongo events should also flow into another DI sink:
+#### Terminal or Console, no ILogger
 
 ```csharp
-builder.Services.AddMongoProfilerBridge(
-    options => { options.Port = 5179; },
-    resolveExternalSink: _ => factory.GetInstance<IMongoProfilerEventSink>());
+var settings = MongoClientSettings.FromConnectionString(connectionString);
+
+settings = settings.UseMongoProfiler();
+
+return new MongoClient(settings);
 ```
 
-## 3. Viewer connection
+#### ILogger
 
-Point viewer to your app's gRPC endpoint:
+`s = serviceCollection`
 
-- ASP.NET app mode: same host/port where `MapMongoProfiler()` is mapped
-- worker/batch mode: host/port configured in `AddMongoProfilerBridge(...)`
+```csharp
+s.AddLogging(builder => builder.AddConsole());
+```
 
-The viewer subscribes via `Subscribe`.
+```csharp
+var settings = MongoClientSettings.FromConnectionString(connectionString);
 
-## 4. Setup notes
+var loggerFactory = factory.GetInstance<ILoggerFactory>();
+var logger = loggerFactory.CreateLogger("MongoProfiler");
 
-- This package currently focuses on the standard in-process relay model (app emits events, viewer subscribes).
-- If you need a central aggregator model, host one application that runs the same relay registration and route all producers there through your own transport/pipeline.
-- `UseMongoProfiler(...)` is a `MongoClientSettings` extension; call it before `new MongoClient(settings)`.
+settings = settings.UseMongoProfiler(logger);
+
+return new MongoClient(settings);
+```
+
+This keeps the integration independent of ASP.NET-specific helpers while still publishing profiler events to the shared broadcaster or custom sink registered in your container.
+
+### Logging-only mode
+
+If you only want query logging and do not need the gRPC viewer pipeline:
+
+```csharp
+var settings = MongoClientSettings.FromConnectionString("mongodb://localhost:27017");
+settings = settings.UseMongoProfiler(logger);
+
+var client = new MongoClient(settings);
+```
+
+## Viewer connection
+
+Point the viewer to the host and port that expose the gRPC `Subscribe` stream:
+
+- ASP.NET mode: the same app that calls `app.MapMongoProfiler()`
+- worker or console mode: the hosted relay configured by `AddMongoProfilerPublisher(...)`
+- plain app mode: the relay returned by `MongoProfilerRelay.StartAsync(...)`
+
+## Notes on sinks and DI
+
+- `AddMongoProfiler()` registers `MongoProfilerEventChannelBroadcaster` as the default `IMongoProfilerEventSink`.
+- `AddMongoProfilerPublisher(...)` includes `AddMongoProfiler()` and then hosts the relay.
+- `MongoProfilerRelay.StartAsync(...)` is the non-DI, non-hosted equivalent when the app needs viewer streaming but does not already have a host.
+- The optional `sink` argument on `AddMongoProfilerPublisher(...)` is intended for supplying an existing broadcaster instance that should be shared with the relay host.
+
+## Event behavior
+
+The underlying instrumentation in `Mongo.Profiler` can:
+
+- log rendered Mongo commands
+- publish `MongoProfilerQueryEvent` messages to the configured sink
+- include request and reply metadata such as result counts, cursor IDs, payload sizes, and error details
+- emit query fingerprints and trace identifiers
+- run optional index-advice analysis for slow `find` and `aggregate` operations when configured through the core `MongoProfilerOptions`
+
+## Packaging (maintainers)
+
+- Never re-pack an existing version number. NuGet treats package versions as immutable, so once a given version has been restored on any machine, it is cached under `~/.nuget/packages/mongo.profiler.client/<version>/` and future restores short-circuit to that cached copy, even if you overwrite the `.nupkg` with new content. Consumers will then build against stale bits with no obvious diagnostic.
+- Bump the version on every pack: run `build-nuget.ps1 -Bump patch` (or `-Version x.y.z`) so consumers pick up changes without anyone having to clear caches.
+- If a stale cache is already suspected, delete the offending version folder under `~/.nuget/packages/mongo.profiler.client/` and `dotnet restore --force`.

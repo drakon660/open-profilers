@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(command -v strings)",
+      "Bash(powershell -NoProfile -Command '$a = [System.Reflection.Assembly]::LoadFile\\('\\\\''C:\\\\tmp\\\\pkg\\\\lib\\\\net8.0\\\\Mongo.Profiler.Client.dll'\\\\''\\); $a.GetTypes\\(\\) | ForEach-Object { $_.FullName }')",
+      "Bash(cp /tmp/pkg/lib/net8.0/Mongo.Profiler.Client.dll /c/tmp/Mongo.Profiler.Client.dll)",
+      "Bash(cp /tmp/pkg/lib/net8.0/Mongo.Profiler.dll /c/tmp/Mongo.Profiler.dll)",
+      "Read(//c/tmp//**)",
+      "Bash(powershell -NoProfile -Command '$a = [System.Reflection.Assembly]::LoadFile\\('\\\\''C:\\\\tmp\\\\Mongo.Profiler.Client.dll'\\\\''\\); $a.GetTypes\\(\\) | ForEach-Object { $_.FullName }')",
+      "Bash(powershell -NoProfile -Command '$a = [System.Reflection.Assembly]::LoadFile\\('\\\\''C:\\\\tmp\\\\Mongo.Profiler.Client.dll'\\\\''\\); try { $a.GetTypes\\(\\) | ForEach-Object { $_.FullName } } catch [System.Reflection.ReflectionTypeLoadException] { $_.Exception.Types | Where-Object { $_ -ne $null } | ForEach-Object { $_.FullName } }')",
+      "Bash(powershell -NoProfile -Command 'Add-Type -AssemblyName '\\\\''System.Reflection.Metadata'\\\\''; $peReader = New-Object System.Reflection.PortableExecutable.PEReader\\([System.IO.File]::OpenRead\\('\\\\''C:\\\\tmp\\\\Mongo.Profiler.Client.dll'\\\\''\\)\\); $md = $peReader.GetMetadataReader\\(\\); foreach \\($h in $md.TypeDefinitions\\) { $t = $md.GetTypeDefinition\\($h\\); $ns = $md.GetString\\($t.Namespace\\); $n = $md.GetString\\($t.Name\\); Write-Output \\($ns + '\\\\''.'\\\\'' + $n\\) }')",
+      "Bash(command -v pwsh)",
+      "Bash(pwsh --version)",
+      "Bash(pwsh *)",
+      "Bash(mkdir -p /tmp/nuget-test)",
+      "Read(//tmp/**)",
+      "Bash(rm -rf *)",
+      "Bash(dotnet nuget *)",
+      "Bash(dotnet restore *)",
+      "Bash(dotnet build *)",
+      "Bash(ls C:/src/open-profilers/*.md)",
+      "Bash(rm -rf /tmp/pack-check)",
+      "Bash(mkdir -p /tmp/pack-check)",
+      "Bash(dotnet pack *)",
+      "Bash(rm -rf /tmp/pack-check-extract)",
+      "Bash(mkdir /tmp/pack-check-extract)",
+      "Bash(unzip -q /tmp/pack-check/Mongo.Profiler.Client.1.0.5.nupkg)"
+    ]
+  }
+}

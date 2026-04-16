@@ -88,6 +88,71 @@ public static class MongoClientSettingsExtensions
 
         return settings;
     }
+    
+    public static MongoClientSettings SubscribeToMongoQueries(
+        this MongoClientSettings settings,
+        ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var options = new MongoProfilerOptions();
+        var redaction = BuildRedactionConfig(options.Redaction);
+
+        var existingClusterConfigurator = settings.ClusterConfigurator;
+        var commandByRequestId = new ConcurrentDictionary<int, CommandEnvelope>();
+
+        settings.ClusterConfigurator = clusterBuilder =>
+        {
+            existingClusterConfigurator?.Invoke(clusterBuilder);
+
+            clusterBuilder.Subscribe<CommandStartedEvent>(commandStartedEvent =>
+            {
+                if (ShouldSkipCommand(commandStartedEvent.CommandName, commandStartedEvent.Command))
+                    return;
+
+                var sanitizedCommand = RedactAndTruncate(commandStartedEvent.Command, redaction);
+                var query = MongoCommandQueryBuilder.Build(commandStartedEvent.CommandName, sanitizedCommand);
+                if (!string.IsNullOrWhiteSpace(query))
+                {
+                    commandByRequestId[commandStartedEvent.RequestId] = new CommandEnvelope(
+                        query,
+                        BuildQueryFingerprint(commandStartedEvent.CommandName, commandStartedEvent.Command),
+                        GetDatabaseName(commandStartedEvent.Command),
+                        GetCollectionName(commandStartedEvent.CommandName, commandStartedEvent.Command),
+                        GetSessionId(commandStartedEvent.Command),
+                        GetServerEndpoint(commandStartedEvent),
+                        commandStartedEvent.OperationId?.ToString() ?? string.Empty,
+                        GetStringifiedValue(commandStartedEvent.Command, "$readPreference", redaction.MaxStringLength),
+                        GetStringifiedValue(commandStartedEvent.Command, "readConcern", redaction.MaxStringLength),
+                        GetStringifiedValue(commandStartedEvent.Command, "writeConcern", redaction.MaxStringLength),
+                        ConvertToIntOrNull(commandStartedEvent.Command, "maxTimeMS"),
+                        ConvertToBoolOrNull(commandStartedEvent.Command, "allowDiskUse"),
+                        CalculateBsonSize(commandStartedEvent.Command),
+                        commandStartedEvent.Command.DeepClone().AsBsonDocument,
+                        Activity.Current?.TraceId.ToString() ?? string.Empty,
+                        Activity.Current?.SpanId.ToString() ?? string.Empty);
+                }
+            });
+
+            clusterBuilder.Subscribe<CommandSucceededEvent>(commandSucceededEvent =>
+            {
+                if (!commandByRequestId.TryRemove(commandSucceededEvent.RequestId, out var commandEnvelope))
+                    return;
+
+                WriteQueryLog(logger, commandEnvelope.Query, commandSucceededEvent.CommandName, commandSucceededEvent.Duration, null);
+            });
+
+            clusterBuilder.Subscribe<CommandFailedEvent>(commandFailedEvent =>
+            {
+                if (!commandByRequestId.TryRemove(commandFailedEvent.RequestId, out var commandEnvelope))
+                    return;
+
+                var error = commandFailedEvent.Failure?.Message;
+                WriteQueryLog(logger, commandEnvelope.Query, commandFailedEvent.CommandName, commandFailedEvent.Duration, error);
+            });
+        };
+
+        return settings;
+    }
 
     private static void PublishEvent(
         IMongoProfilerEventSink? sink,

@@ -2,7 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Mongo.Profiler;
-using Mongo.Profiler.Client.Console;
+using Mongo.Profiler.Client;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
