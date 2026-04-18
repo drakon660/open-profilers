@@ -41,24 +41,7 @@ Expand the current Mongo command subscription pipeline to capture richer telemet
 
 ## 2) Data Contract (Enriched preview event)
 
-### 2.1 New fields to add (all optional in proto)
-- `server_endpoint` (host:port)
-- `operation_id`
-- `command_name` (already present, keep)
-- `result_count` (already present, keep)
-- `session_id` (already present, keep)
-- `error_code`
-- `error_code_name`
-- `error_labels` (repeated string)
-- `cursor_id`
-- `reply_size_bytes`
-- `command_size_bytes`
-- `query_fingerprint`
-- `read_preference`
-- `read_concern`
-- `write_concern`
-- `max_time_ms`
-- `allow_disk_use`
+The full list of enriched fields is maintained in `MONGO_PROFILER_FIELD_DICTIONARY.md`.
 
 ### 2.2 Compatibility strategy
 - Keep existing fields unchanged.
@@ -144,11 +127,8 @@ Expand the current Mongo command subscription pipeline to capture richer telemet
 ## 6) Testing and Validation
 
 ### 6.1 Functional scenarios
-- `find` success/failure
-- `aggregate` success/failure
-- `insert/update/delete` to validate write metrics
-- multi-session / explicit session verification
-- disconnect/reconnect viewer while streaming
+
+Functional scenarios are documented in `Mongo.Profiler.Samples/VALIDATION_SCENARIOS.md`.
 
 ### 6.2 Contract validation
 - Confirm no exceptions on missing fields.
@@ -204,17 +184,6 @@ Expand the current Mongo command subscription pipeline to capture richer telemet
 
 ---
 
-## 10) Next Feature Candidates (EF Profiler)
+## 10) Next Feature Candidates
 
-### 10.1 Query shape fingerprint + repeat aggregation
-- Add stable EF SQL shape id (`query_shape_id`) using normalized SQL text + parameter type signature.
-- Aggregate repeated identical warnings within a short window to reduce noise:
-  - emit first occurrence as normal
-  - include repeat counters on subsequent emissions (`repeat_count`, `first_seen_utc`, `last_seen_utc`)
-- Add bounded in-memory retention for shape aggregation maps.
-- Surface shape grouping in viewer so "top repeated warnings" is visible by endpoint/query shape.
-
-### 10.2 Initial acceptance criteria
-- Same logical query with different literal values maps to one `query_shape_id`.
-- Warning spam under load is reduced without losing first-seen signal.
-- Aggregation state remains bounded and does not grow unbounded over long runs.
+The backlog of follow-on features (query shape rollups, repeat aggregation, efficiency heuristics, sampled explain, OTel alignment, slow-query policy) lives in `mongo_features.md`.
