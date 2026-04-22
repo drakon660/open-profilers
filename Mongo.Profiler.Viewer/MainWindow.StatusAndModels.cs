@@ -64,6 +64,7 @@ public partial class MainWindow
         public string Fingerprint { get; set; } = string.Empty;
         public string WinningPlanSummary { get; set; } = string.Empty;
         public string ExecutionPlanXml { get; set; } = string.Empty;
+        public string OriginalCommand { get; set; } = string.Empty;
 
         public string UnixTimeMsDisplay => UnixTimeMs > 0 ? UnixTimeMs.ToString() : "-";
         public string ResultCountDisplay => ResultCount?.ToString() ?? "-";

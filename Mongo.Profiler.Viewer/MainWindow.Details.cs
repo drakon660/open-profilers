@@ -72,6 +72,7 @@ public partial class MainWindow
         }
 
         QueryCommandBox.Text = PrettifyForDisplay(row.FullQuery);
+        RawCommandBox.Text = row.OriginalCommand ?? string.Empty;
         ReplaceDataRows(BuildDataRows(row));
     }
 
@@ -84,6 +85,7 @@ public partial class MainWindow
         }
 
         QueryCommandBox.Text = PrettifyForDisplay(row.CommandDocument);
+        RawCommandBox.Text = row.CommandDocument ?? string.Empty;
         ReplaceDataRows(BuildDataRows(row));
     }
 
@@ -119,6 +121,7 @@ public partial class MainWindow
     private void ClearDetailsPanel()
     {
         QueryCommandBox.Text = string.Empty;
+        RawCommandBox.Text = string.Empty;
         _dataDetailsRows.Clear();
     }
 
@@ -132,6 +135,7 @@ public partial class MainWindow
     private static IEnumerable<DataDetailRow> BuildDataRows(GrpcGridRow row)
     {
         yield return new DataDetailRow("query_command", string.IsNullOrWhiteSpace(row.FullQuery) ? "-" : row.FullQuery);
+        yield return new DataDetailRow("original_command", string.IsNullOrWhiteSpace(row.OriginalCommand) ? "-" : row.OriginalCommand);
         yield return new DataDetailRow("unix_time_ms", row.UnixTimeMsDisplay);
         yield return new DataDetailRow("query_count", row.QueryCount.ToString());
         yield return new DataDetailRow("avg_duration", row.AvgDurationDisplay);

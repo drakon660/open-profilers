@@ -42,4 +42,5 @@ public sealed class MongoProfilerQueryEvent
     public long? ExplainNReturned { get; init; }
     public string WinningPlanSummary { get; init; } = string.Empty;
     public string ExecutionPlanXml { get; init; } = string.Empty;
+    public string OriginalCommand { get; init; } = string.Empty;
 }

@@ -76,6 +76,15 @@
             <Setter Property="Background" Value="#F28C2A" />
             <Setter Property="Foreground" Value="#1D1D1D" />
         </Style>
+        <Style Selector="DataGrid.events-grid">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="CanUserResizeColumns" Value="True" />
+            <Setter Property="CanUserSortColumns" Value="False" />
+            <Setter Property="GridLinesVisibility" Value="All" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        </Style>
         <Style Selector="Button.titlebar-button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="White" />
@@ -233,61 +242,55 @@
                             Margin="0,0,0,0">
                     <TabItem Header="gRPC Stream">
                         <DataGrid x:Name="GrpcEventsGrid"
-                                  AutoGenerateColumns="False"
-                                  IsReadOnly="True"
-                                  CanUserResizeColumns="True"
-                                  CanUserSortColumns="False"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                  GridLinesVisibility="All"
+                                  Classes="events-grid"
                                   SelectionChanged="GrpcEventsGrid_SelectionChanged">
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn Header="UNIX TIME MS" Width="150">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding UnixTimeMsDisplay}" HorizontalAlignment="Left" Margin="0" Padding="0" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding UnixTimeMsDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="QUERY COUNT" Width="120">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding QueryCount}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding QueryCount}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="AVG. DURATION" Width="130">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding AvgDurationDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding AvgDurationDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="STATUS" Width="100">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding Status}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding Status}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="COMMAND" Width="120">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding CommandName}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding CommandName}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="LAST SERVER" Width="160">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding ServerEndpoint}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding ServerEndpoint}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="SHORT QUERY" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding ShortQuery}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding ShortQuery}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -297,61 +300,55 @@
 
                     <TabItem Header="system.profile">
                         <DataGrid x:Name="ProfileEventsGrid"
-                                  AutoGenerateColumns="False"
-                                  IsReadOnly="True"
-                                  CanUserResizeColumns="True"
-                                  CanUserSortColumns="False"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                  GridLinesVisibility="All"
+                                  Classes="events-grid"
                                   SelectionChanged="ProfileEventsGrid_SelectionChanged">
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn Header="DATE" Width="205">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding TsDateTimeDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding TsDateTimeDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="APP NAME" Width="150">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding AppNameDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding AppNameDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="CLIENT" Width="150">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding ClientDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding ClientDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="OP" Width="90">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding OpDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding OpDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="DOCS EXAMINED" Width="165">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding DocsExaminedDisplay}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding DocsExaminedDisplay}" TextTrimming="CharacterEllipsis" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="NRETURNED" Width="120">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding NReturnedDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding NReturnedDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="COMMAND" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding CommandDocumentDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                            <TextBlock Text="{Binding CommandDocumentDisplay}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -374,6 +371,19 @@
                     <TabControl>
                     <TabItem Header="Query / Command">
                         <TextBox x:Name="QueryCommandBox"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas"
+                                 FontSize="13"
+                                 Background="#F7F7F7"
+                                 BorderBrush="#C8C8C8"
+                                 BorderThickness="1" />
+                    </TabItem>
+                    <TabItem Header="Raw Command">
+                        <TextBox x:Name="RawCommandBox"
                                  IsReadOnly="True"
                                  AcceptsReturn="True"
                                  TextWrapping="NoWrap"

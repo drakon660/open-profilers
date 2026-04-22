@@ -14,6 +14,12 @@ namespace Mongo.Profiler;
 
 public static class MongoClientSettingsExtensions
 {
+    private static readonly JsonWriterSettings OriginalCommandJson = new()
+    {
+        Indent = true,
+        OutputMode = JsonOutputMode.Shell
+    };
+
     public static MongoClientSettings SubscribeToMongoQueries(
         this MongoClientSettings settings,
         ILogger? logger = null,
@@ -39,7 +45,7 @@ public static class MongoClientSettingsExtensions
         {
             existingClusterConfigurator?.Invoke(clusterBuilder);
 
-            PublishHeartbeatEvent(sink, applicationName, "profiler", "profiler attached", logger, success: true);
+            //PublishHeartbeatEvent(sink, applicationName, "profiler", "profiler attached", logger, success: true);
 
             clusterBuilder.Subscribe<CommandStartedEvent>(commandStartedEvent =>
             {
@@ -203,7 +209,8 @@ public static class MongoClientSettingsExtensions
                 ExplainNReturned = advice.NReturned,
                 WinningPlanSummary = advice.WinningPlanSummary,
                 TraceId = commandEnvelope.TraceId,
-                SpanId = commandEnvelope.SpanId
+                SpanId = commandEnvelope.SpanId,
+                OriginalCommand = SerializeOriginalCommand(commandEnvelope.OriginalCommand)
             });
         }
         catch
@@ -659,6 +666,18 @@ public static class MongoClientSettingsExtensions
             BsonType.String => TruncateString(value.AsString, redactionConfig.MaxStringLength),
             _ => value
         };
+    }
+
+    private static string SerializeOriginalCommand(BsonDocument command)
+    {
+        try
+        {
+            return command.ToJson(OriginalCommandJson);
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private static string TruncateString(string value, int maxStringLength)

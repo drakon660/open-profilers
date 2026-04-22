@@ -380,7 +380,8 @@ public partial class MainWindow
             ErrorCodeName = profilerEvent.HasErrorCodeName ? profilerEvent.ErrorCodeName : string.Empty,
             Fingerprint = profilerEvent.HasQueryFingerprint ? profilerEvent.QueryFingerprint : string.Empty,
             WinningPlanSummary = profilerEvent.HasWinningPlanSummary ? profilerEvent.WinningPlanSummary : string.Empty,
-            ExecutionPlanXml = profilerEvent.HasExecutionPlanXml ? profilerEvent.ExecutionPlanXml : string.Empty
+            ExecutionPlanXml = profilerEvent.HasExecutionPlanXml ? profilerEvent.ExecutionPlanXml : string.Empty,
+            OriginalCommand = profilerEvent.HasOriginalCommand ? profilerEvent.OriginalCommand : string.Empty
         });
     }
 
@@ -441,7 +442,8 @@ public partial class MainWindow
                     ErrorCodeName = latest.ErrorCodeName,
                     Fingerprint = latest.Fingerprint,
                     WinningPlanSummary = latest.WinningPlanSummary,
-                    ExecutionPlanXml = latest.ExecutionPlanXml
+                    ExecutionPlanXml = latest.ExecutionPlanXml,
+                    OriginalCommand = latest.OriginalCommand
                 };
             })
             .OrderByDescending(row => row.DurationMs)
