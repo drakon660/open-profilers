@@ -380,12 +380,14 @@ public partial class MainWindow
             ErrorCodeName = profilerEvent.HasErrorCodeName ? profilerEvent.ErrorCodeName : string.Empty,
             Fingerprint = profilerEvent.HasQueryFingerprint ? profilerEvent.QueryFingerprint : string.Empty,
             WinningPlanSummary = profilerEvent.HasWinningPlanSummary ? profilerEvent.WinningPlanSummary : string.Empty,
-            ExecutionPlanXml = profilerEvent.HasExecutionPlanXml ? profilerEvent.ExecutionPlanXml : string.Empty
+            ExecutionPlanXml = profilerEvent.HasExecutionPlanXml ? profilerEvent.ExecutionPlanXml : string.Empty,
+            OriginalCommand = profilerEvent.HasOriginalCommand ? profilerEvent.OriginalCommand : string.Empty
         });
     }
 
     private void PushGrpcEventToUi(GrpcRawEventRow row)
     {
+        RemoveSampleRows();
         _grpcAllEvents.Add(row);
         RebuildGrpcRows(selectEvent: row);
     }
@@ -440,7 +442,8 @@ public partial class MainWindow
                     ErrorCodeName = latest.ErrorCodeName,
                     Fingerprint = latest.Fingerprint,
                     WinningPlanSummary = latest.WinningPlanSummary,
-                    ExecutionPlanXml = latest.ExecutionPlanXml
+                    ExecutionPlanXml = latest.ExecutionPlanXml,
+                    OriginalCommand = latest.OriginalCommand
                 };
             })
             .OrderByDescending(row => row.DurationMs)
@@ -503,6 +506,7 @@ public partial class MainWindow
 
     private void PushProfileEventToUi(ProfileGridRow row)
     {
+        RemoveSampleRows();
         var insertIndex = 0;
         while (insertIndex < _profileRows.Count && CompareProfileRowsDesc(_profileRows[insertIndex], row) <= 0)
             insertIndex++;
