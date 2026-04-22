@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
@@ -30,8 +32,6 @@ public static class MongoClientSettingsExtensions
         var existingClusterConfigurator = settings.ClusterConfigurator;
         var commandByRequestId = new ConcurrentDictionary<int, CommandEnvelope>();
         var indexAdvisor = MongoIndexAdvisor.Create(settings, options.IndexAdvisor, logger);
-        var lastHeartbeatFailureByEndpoint = new ConcurrentDictionary<string, DateTimeOffset>();
-        var heartbeatDebounce = TimeSpan.FromSeconds(10);
         var lastConnectionFailureByEndpoint = new ConcurrentDictionary<string, DateTimeOffset>();
         var connectionFailureDebounce = TimeSpan.FromSeconds(10);
 
@@ -39,13 +39,12 @@ public static class MongoClientSettingsExtensions
         {
             existingClusterConfigurator?.Invoke(clusterBuilder);
 
-            PublishHeartbeatEvent(sink, applicationName, "profiler", "profiler attached", logger, success: true);
-
             clusterBuilder.Subscribe<CommandStartedEvent>(commandStartedEvent =>
             {
+                MongoRawEventLogger.DumpCommandStarted(commandStartedEvent);
+
                 if (ShouldSkipCommand(commandStartedEvent.CommandName, commandStartedEvent.Command))
                     return;
-
                 var sanitizedCommand = RedactAndTruncate(commandStartedEvent.Command, redaction);
                 var query = MongoCommandQueryBuilder.Build(commandStartedEvent.CommandName, sanitizedCommand);
                 if (!string.IsNullOrWhiteSpace(query))
@@ -72,9 +71,11 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<CommandSucceededEvent>(commandSucceededEvent =>
             {
+                MongoRawEventLogger.DumpCommandSucceeded(commandSucceededEvent);
+
                 if (!commandByRequestId.TryRemove(commandSucceededEvent.RequestId, out var commandEnvelope))
                     return;
-
+                
                 WriteQueryLog(logger, commandEnvelope.Query, commandSucceededEvent.CommandName, commandSucceededEvent.Duration, null);
                 var outcome = ExtractSucceededOutcome(commandSucceededEvent.CommandName, commandSucceededEvent.Reply);
                 var advice = indexAdvisor?.Analyze(commandEnvelope, commandSucceededEvent.CommandName, commandSucceededEvent.Duration)
@@ -85,6 +86,8 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<CommandFailedEvent>(commandFailedEvent =>
             {
+                MongoRawEventLogger.DumpCommandFailed(commandFailedEvent);
+
                 if (!commandByRequestId.TryRemove(commandFailedEvent.RequestId, out var commandEnvelope))
                     return;
 
@@ -98,42 +101,51 @@ public static class MongoClientSettingsExtensions
             
             clusterBuilder.Subscribe<ClusterDescriptionChangedEvent>(changedEvent =>
             {
+                MongoRawEventLogger.DumpClusterDescriptionChanged(changedEvent);
+
                 var oldDescription = changedEvent.OldDescription;
                 var newDescription = changedEvent.NewDescription;
-                if (oldDescription.State == newDescription.State && oldDescription.Type == newDescription.Type)
+
+                if (!HasMeaningfulChange(oldDescription, newDescription))
                     return;
 
                 PublishConnectivityEvent(sink, applicationName, oldDescription, newDescription, logger);
             });
             
-            clusterBuilder.Subscribe<ServerHeartbeatFailedEvent>(heartbeatFailedEvent =>
-            {
-                var endpoint = heartbeatFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
-                var now = DateTimeOffset.UtcNow;
-                if (lastHeartbeatFailureByEndpoint.TryGetValue(endpoint, out var last) && now - last < heartbeatDebounce)
-                    return;
-
-                lastHeartbeatFailureByEndpoint[endpoint] = now;
-                PublishHeartbeatEvent(
-                    sink,
-                    applicationName,
-                    endpoint,
-                    heartbeatFailedEvent.Exception?.Message ?? "heartbeat failed",
-                    logger,
-                    success: false);
-            });
-
-            clusterBuilder.Subscribe<ServerHeartbeatSucceededEvent>(heartbeatSucceededEvent =>
-            {
-                var endpoint = heartbeatSucceededEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
-                if (!lastHeartbeatFailureByEndpoint.TryRemove(endpoint, out _))
-                    return;
-
-                PublishHeartbeatEvent(sink, applicationName, endpoint, null, logger, success: true);
-            });
+            // clusterBuilder.Subscribe<ServerHeartbeatFailedEvent>(heartbeatFailedEvent =>
+            // {
+            //     MongoRawEventLogger.DumpServerHeartbeatFailed(heartbeatFailedEvent);
+            //
+            //     var endpoint = heartbeatFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
+            //     var now = DateTimeOffset.UtcNow;
+            //     if (lastHeartbeatFailureByEndpoint.TryGetValue(endpoint, out var last) && now - last < heartbeatDebounce)
+            //         return;
+            //
+            //     lastHeartbeatFailureByEndpoint[endpoint] = now;
+            //     PublishHeartbeatEvent(
+            //         sink,
+            //         applicationName,
+            //         FormatEndpoint(endpoint),
+            //         heartbeatFailedEvent.Exception?.Message ?? "heartbeat failed",
+            //         logger,
+            //         success: false);
+            // });
+            //
+            // clusterBuilder.Subscribe<ServerHeartbeatSucceededEvent>(heartbeatSucceededEvent =>
+            // {
+            //     MongoRawEventLogger.DumpServerHeartbeatSucceeded(heartbeatSucceededEvent);
+            //
+            //     var endpoint = heartbeatSucceededEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
+            //     if (!lastHeartbeatFailureByEndpoint.TryRemove(endpoint, out _))
+            //         return;
+            //
+            //     PublishHeartbeatEvent(sink, applicationName, FormatEndpoint(endpoint), null, logger, success: true);
+            // });
 
             clusterBuilder.Subscribe<ConnectionOpeningFailedEvent>(connectionOpeningFailedEvent =>
             {
+                MongoRawEventLogger.DumpConnectionOpeningFailed(connectionOpeningFailedEvent);
+
                 var endpoint = connectionOpeningFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
                 var now = DateTimeOffset.UtcNow;
                 if (lastConnectionFailureByEndpoint.TryGetValue(endpoint, out var last) && now - last < connectionFailureDebounce)
@@ -143,7 +155,7 @@ public static class MongoClientSettingsExtensions
                 PublishConnectionOpeningFailedEvent(
                     sink,
                     applicationName,
-                    endpoint,
+                    FormatEndpoint(endpoint),
                     connectionOpeningFailedEvent.Exception?.Message ?? "connection opening failed",
                     logger);
             });
@@ -219,46 +231,100 @@ public static class MongoClientSettingsExtensions
         ClusterDescription newDescription,
         ILogger? logger)
     {
-        var endpoints = string.Join(",", newDescription.Servers.Select(server => server.EndPoint?.ToString() ?? string.Empty));
-        var heartbeatError = newDescription.Servers
-            .Select(server => server.HeartbeatException?.Message)
-            .FirstOrDefault(message => !string.IsNullOrWhiteSpace(message));
-
-        var success = newDescription.State == ClusterState.Connected;
-        var transition = $"cluster {oldDescription.State} -> {newDescription.State} ({newDescription.Type})";
-        var errorMessage = success ? null : heartbeatError ?? "cluster disconnected";
-
         if (logger is not null)
         {
-            if (success)
+            var transition = $"cluster {oldDescription.State} -> {newDescription.State} ({newDescription.Type})";
+            var heartbeatError = newDescription.Servers
+                .Select(server => server.HeartbeatException?.Message)
+                .FirstOrDefault(message => !string.IsNullOrWhiteSpace(message));
+            if (newDescription.State == ClusterState.Connected)
                 logger.LogInformation("Mongo connectivity change: {Transition}.", transition);
             else
-                logger.LogWarning("Mongo connectivity change: {Transition}. {Error}", transition, errorMessage);
+                logger.LogWarning("Mongo connectivity change: {Transition}. {Error}", transition, heartbeatError ?? "cluster disconnected");
         }
 
         if (sink is null)
             return;
 
+        PublishClusterSnapshot(sink, applicationName, oldDescription, "old");
+        PublishClusterSnapshot(sink, applicationName, newDescription, "new");
+    }
+
+    private static void PublishClusterSnapshot(
+        IMongoProfilerEventSink sink,
+        string applicationName,
+        ClusterDescription description,
+        string snapshotRole)
+    {
         try
         {
+            var endpoints = string.Join(",", description.Servers
+                .Select(server => FormatEndpoint(server.EndPoint?.ToString())));
+            var heartbeatError = description.Servers
+                .Select(server => server.HeartbeatException?.Message)
+                .FirstOrDefault(message => !string.IsNullOrWhiteSpace(message));
+            var success = description.State == ClusterState.Connected;
+
             sink.Publish(new MongoProfilerQueryEvent
             {
                 ApplicationName = applicationName,
                 CommandName = "connectivity",
                 DatabaseName = string.Empty,
                 CollectionName = string.Empty,
-                Query = transition,
+                Query = SerializeServers(description),
                 DurationMs = 0,
                 Success = success,
-                ErrorMessage = errorMessage,
+                ErrorMessage = success ? null : heartbeatError ?? "cluster disconnected",
                 ServerEndpoint = endpoints,
-                QueryFingerprint = "SYSTEM:CONNECTIVITY"
+                QueryFingerprint = $"SYSTEM:CONNECTIVITY:{DateTimeOffset.UtcNow.Ticks}:{snapshotRole}"
             });
         }
         catch
         {
             // Connectivity diagnostics must never affect application execution.
         }
+    }
+
+    private static string SerializeServers(ClusterDescription description)
+    {
+        var servers = new JsonArray();
+        foreach (var server in description.Servers)
+        {
+            servers.Add(new JsonObject
+            {
+                ["Endpoint"] = FormatEndpoint(server.EndPoint?.ToString()),
+                ["Type"] = server.Type.ToString(),
+                ["State"] = server.State.ToString(),
+                ["HeartbeatException"] = server.HeartbeatException?.Message
+            });
+        }
+
+        return servers.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static bool HasMeaningfulChange(ClusterDescription oldDescription, ClusterDescription newDescription)
+    {
+        if (oldDescription.State != newDescription.State || oldDescription.Type != newDescription.Type)
+            return true;
+
+        var oldByEndpoint = oldDescription.Servers.ToDictionary(
+            server => server.EndPoint?.ToString() ?? string.Empty,
+            server => server,
+            StringComparer.Ordinal);
+
+        if (oldByEndpoint.Count != newDescription.Servers.Count())
+            return true;
+
+        foreach (var current in newDescription.Servers)
+        {
+            var key = current.EndPoint?.ToString() ?? string.Empty;
+            if (!oldByEndpoint.TryGetValue(key, out var previous))
+                return true;
+            if (previous.State != current.State || previous.Type != current.Type)
+                return true;
+        }
+
+        return false;
     }
 
     private static void PublishConnectionOpeningFailedEvent(
@@ -288,52 +354,7 @@ public static class MongoClientSettingsExtensions
                 Success = false,
                 ErrorMessage = error,
                 ServerEndpoint = endpoint,
-                QueryFingerprint = "SYSTEM:CONNECTIVITY"
-            });
-        }
-        catch
-        {
-            // Connectivity diagnostics must never affect application execution.
-        }
-    }
-
-    private static void PublishHeartbeatEvent(
-        IMongoProfilerEventSink? sink,
-        string applicationName,
-        string endpoint,
-        string? error,
-        ILogger? logger,
-        bool success)
-    {
-        var message = success
-            ? $"heartbeat recovered for {endpoint}"
-            : $"heartbeat failed for {endpoint}";
-
-        if (logger is not null)
-        {
-            if (success)
-                logger.LogInformation("Mongo {Message}.", message);
-            else
-                logger.LogWarning("Mongo {Message}. {Error}", message, error ?? string.Empty);
-        }
-
-        if (sink is null)
-            return;
-
-        try
-        {
-            sink.Publish(new MongoProfilerQueryEvent
-            {
-                ApplicationName = applicationName,
-                CommandName = "connectivity",
-                DatabaseName = string.Empty,
-                CollectionName = string.Empty,
-                Query = message,
-                DurationMs = 0,
-                Success = success,
-                ErrorMessage = success ? null : error,
-                ServerEndpoint = endpoint,
-                QueryFingerprint = "SYSTEM:CONNECTIVITY"
+                QueryFingerprint = $"SYSTEM:CONNECTIVITY:{DateTimeOffset.UtcNow.Ticks}"
             });
         }
         catch
@@ -680,4 +701,15 @@ public static class MongoClientSettingsExtensions
     }
 
     private sealed record RedactionConfig(int MaxStringLength, HashSet<string> SensitiveKeys);
+
+    internal static string FormatEndpoint(string? endpoint)
+    {
+        if (string.IsNullOrEmpty(endpoint))
+            return string.Empty;
+
+        const string unspecifiedPrefix = "Unspecified/";
+        return endpoint.StartsWith(unspecifiedPrefix, StringComparison.Ordinal)
+            ? endpoint[unspecifiedPrefix.Length..]
+            : endpoint;
+    }
 }
