@@ -386,6 +386,7 @@ public partial class MainWindow
 
     private void PushGrpcEventToUi(GrpcRawEventRow row)
     {
+        RemoveSampleRows();
         _grpcAllEvents.Add(row);
         RebuildGrpcRows(selectEvent: row);
     }
@@ -503,6 +504,7 @@ public partial class MainWindow
 
     private void PushProfileEventToUi(ProfileGridRow row)
     {
+        RemoveSampleRows();
         var insertIndex = 0;
         while (insertIndex < _profileRows.Count && CompareProfileRowsDesc(_profileRows[insertIndex], row) <= 0)
             insertIndex++;

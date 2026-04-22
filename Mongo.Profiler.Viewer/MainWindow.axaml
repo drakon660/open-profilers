@@ -58,7 +58,7 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="DataGridCell">
-            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Padding" Value="5,2" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
@@ -242,13 +242,55 @@
                                   GridLinesVisibility="All"
                                   SelectionChanged="GrpcEventsGrid_SelectionChanged">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="UNIX TIME MS" Binding="{Binding UnixTimeMsDisplay}" Width="150" />
-                                <DataGridTextColumn Header="QUERY COUNT" Binding="{Binding QueryCount}" Width="120" />
-                                <DataGridTextColumn Header="AVG. DURATION" Binding="{Binding AvgDurationDisplay}" Width="130" />
-                                <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="100" />
-                                <DataGridTextColumn Header="COMMAND" Binding="{Binding CommandName}" Width="120" />
-                                <DataGridTextColumn Header="LAST SERVER" Binding="{Binding ServerEndpoint}" Width="160" />
-                                <DataGridTextColumn Header="SHORT QUERY" Binding="{Binding ShortQuery}" Width="SizeToCells" />
+                                <DataGridTemplateColumn Header="UNIX TIME MS" Width="150">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding UnixTimeMsDisplay}" HorizontalAlignment="Left" Margin="0" Padding="0" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="QUERY COUNT" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding QueryCount}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="AVG. DURATION" Width="130">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding AvgDurationDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="STATUS" Width="100">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Status}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="COMMAND" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding CommandName}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="LAST SERVER" Width="160">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding ServerEndpoint}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="SHORT QUERY" Width="*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding ShortQuery}" HorizontalAlignment="Left" TextAlignment="Left" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>
@@ -306,7 +348,7 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="COMMAND" Width="SizeToCells">
+                                <DataGridTemplateColumn Header="COMMAND" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding CommandDocumentDisplay}" HorizontalAlignment="Left" TextAlignment="Left" />

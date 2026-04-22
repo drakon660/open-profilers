@@ -58,6 +58,7 @@ public partial class MainWindow
         _profileRows.Clear();
         _directProfileSeenKeys.Clear();
         _grpcRows.Clear();
+        _showingSampleRows = false;
         ClearDetailsPanel();
         SetStatus("Cleared captured events.", StatusKind.Info);
     }

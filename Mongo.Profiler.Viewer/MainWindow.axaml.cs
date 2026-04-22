@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ProfileGridRow> _profileRows = [];
     private readonly ObservableCollection<DataDetailRow> _dataDetailsRows = [];
     private readonly ConcurrentDictionary<string, byte> _directProfileSeenKeys = new(StringComparer.Ordinal);
+    private bool _showingSampleRows;
     private long _statusSequence;
     private long _connectionStateVersion;
     private GrpcChannel? _channel;
@@ -41,6 +42,7 @@ public partial class MainWindow : Window
         GrpcEventsGrid.ItemsSource = _grpcRows;
         ProfileEventsGrid.ItemsSource = _profileRows;
         DataDetailsGrid.ItemsSource = _dataDetailsRows;
+        AddSampleRows();
         AppDomain.CurrentDomain.UnhandledException += _unhandledExceptionHandler;
         TaskScheduler.UnobservedTaskException += _unobservedTaskExceptionHandler;
         SetStatus("Ready.", StatusKind.Info);
@@ -54,6 +56,65 @@ public partial class MainWindow : Window
     private void ApplyBuildVersionToTitle()
     {
         ApplyBuildVersionToTitle(ThisAssembly.NuGetPackageVersion);
+    }
+
+    private void AddSampleRows()
+    {
+        var now = DateTimeOffset.UtcNow;
+        const string grpcQuery = "{ \"find\" : \"orders\", \"filter\" : { \"status\" : \"open\" }, \"limit\" : 20 }";
+        const string profileCommand = "{ \"find\" : \"orders\", \"filter\" : { \"customerId\" : 42 }, \"sort\" : { \"createdAt\" : -1 } }";
+
+        var grpcRow = new GrpcGridRow
+        {
+            GroupKey = "sample|find-orders",
+            UnixTimeMs = now.ToUnixTimeMilliseconds(),
+            QueryCount = 3,
+            AvgDurationMs = 12.42,
+            CommandName = "find",
+            SessionId = "sample-session",
+            ServerEndpoint = "localhost:27017",
+            ResultCount = 20,
+            DurationMs = 11.80,
+            Status = "success",
+            ShortQuery = BuildShortQuery(grpcQuery),
+            FullQuery = grpcQuery,
+            OperationId = "sample-op-001",
+            Fingerprint = "sample-find-orders",
+            WinningPlanSummary = "IXSCAN { status: 1 }"
+        };
+
+        var profileRow = new ProfileGridRow
+        {
+            TimestampUtc = now.AddMilliseconds(-125),
+            TsRaw = now.AddMilliseconds(-125).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+            AppName = "sample-api",
+            Client = "127.0.0.1:50123",
+            CommandDocument = profileCommand,
+            DocsExamined = 42,
+            NReturned = 10,
+            Op = "query",
+            CommandName = "find",
+            ServerEndpoint = "localhost:27017",
+            DurationMs = 8.73,
+            Status = "success"
+        };
+
+        _grpcRows.Add(grpcRow);
+        _profileRows.Add(profileRow);
+        GrpcEventsGrid.SelectedItem = grpcRow;
+        ProfileEventsGrid.SelectedItem = profileRow;
+        _showingSampleRows = true;
+    }
+
+    private void RemoveSampleRows()
+    {
+        if (!_showingSampleRows)
+            return;
+
+        _grpcRows.Clear();
+        _profileRows.Clear();
+        ClearDetailsPanel();
+        _showingSampleRows = false;
     }
 
     private void ApplyBuildVersionToTitle(string? rawVersion)
