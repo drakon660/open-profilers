@@ -45,10 +45,12 @@ public static class MongoClientSettingsExtensions
         {
             existingClusterConfigurator?.Invoke(clusterBuilder);
 
-            //PublishHeartbeatEvent(sink, applicationName, "profiler", "profiler attached", logger, success: true);
+            PublishHeartbeatEvent(sink, applicationName, "profiler", "profiler attached", logger, success: true);
 
             clusterBuilder.Subscribe<CommandStartedEvent>(commandStartedEvent =>
             {
+                MongoRawEventLogger.DumpCommandStarted(commandStartedEvent);
+                
                 if (ShouldSkipCommand(commandStartedEvent.CommandName, commandStartedEvent.Command))
                     return;
 
@@ -78,6 +80,8 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<CommandSucceededEvent>(commandSucceededEvent =>
             {
+                MongoRawEventLogger.DumpCommandSucceeded(commandSucceededEvent);
+                
                 if (!commandByRequestId.TryRemove(commandSucceededEvent.RequestId, out var commandEnvelope))
                     return;
 
@@ -91,6 +95,8 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<CommandFailedEvent>(commandFailedEvent =>
             {
+                MongoRawEventLogger.DumpCommandFailed(commandFailedEvent);
+                
                 if (!commandByRequestId.TryRemove(commandFailedEvent.RequestId, out var commandEnvelope))
                     return;
 
@@ -104,6 +110,8 @@ public static class MongoClientSettingsExtensions
             
             clusterBuilder.Subscribe<ClusterDescriptionChangedEvent>(changedEvent =>
             {
+                MongoRawEventLogger.DumpClusterDescriptionChanged(changedEvent);
+                
                 var oldDescription = changedEvent.OldDescription;
                 var newDescription = changedEvent.NewDescription;
                 if (oldDescription.State == newDescription.State && oldDescription.Type == newDescription.Type)
