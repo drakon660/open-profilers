@@ -452,9 +452,9 @@ public partial class MainWindow
             .ThenByDescending(row => row.QueryCount)
             .ToList();
 
-        _grpcRows.Clear();
-        foreach (var row in grouped)
-            _grpcRows.Add(row);
+        _grpcAllGridRows.Clear();
+        _grpcAllGridRows.AddRange(grouped);
+        ApplyGrpcFilter();
 
         if (_grpcRows.Count == 0)
             return;

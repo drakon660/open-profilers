@@ -242,6 +242,40 @@
                 <TabControl Grid.Row="1"
                             Margin="0,0,0,0">
                     <TabItem Header="gRPC Stream">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top"
+                                    Background="#FAFAFA"
+                                    BorderBrush="#D5D5D5"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="8,6">
+                                <Grid ColumnDefinitions="Auto,10,160,8,160,8,140,8,*,8,Auto">
+                                    <TextBlock Grid.Column="0"
+                                               Text="Filters"
+                                               FontWeight="Bold"
+                                               Foreground="#5F395A"
+                                               VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="2"
+                                             x:Name="FilterCommandBox"
+                                             Watermark="Command (find, aggregate…)"
+                                             TextChanged="FilterTextBox_TextChanged" />
+                                    <TextBox Grid.Column="4"
+                                             x:Name="FilterServerBox"
+                                             Watermark="Server (host:port)"
+                                             TextChanged="FilterTextBox_TextChanged" />
+                                    <TextBox Grid.Column="6"
+                                             x:Name="FilterStatusBox"
+                                             Watermark="Status"
+                                             TextChanged="FilterTextBox_TextChanged" />
+                                    <TextBox Grid.Column="8"
+                                             x:Name="FilterQueryBox"
+                                             Watermark="Query contains…"
+                                             TextChanged="FilterTextBox_TextChanged" />
+                                    <Button Grid.Column="10"
+                                            x:Name="FilterClearButton"
+                                            Content="Clear"
+                                            Click="FilterClear_Click" />
+                                </Grid>
+                            </Border>
                         <DataGrid x:Name="GrpcEventsGrid"
                                   Classes="events-grid"
                                   SelectionChanged="GrpcEventsGrid_SelectionChanged">
@@ -297,6 +331,7 @@
                                 </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
+                        </DockPanel>
                     </TabItem>
 
                     <TabItem Header="system.profile">

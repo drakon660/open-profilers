@@ -61,6 +61,7 @@ public partial class MainWindow
     private void ClearRows()
     {
         _grpcAllEvents.Clear();
+        _grpcAllGridRows.Clear();
         _profileRows.Clear();
         _directProfileSeenKeys.Clear();
         _grpcRows.Clear();
