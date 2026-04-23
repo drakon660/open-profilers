@@ -36,7 +36,7 @@ internal sealed class MongoRawEventLogger
         {
             var directory = string.IsNullOrWhiteSpace(options.DestinationDirectory)
                 ? GetDefaultRawLogsDirectory()
-                : Path.GetFullPath(Environment.ExpandEnvironmentVariables(options.DestinationDirectory));
+                : Path.GetFullPath(Environment.ExpandEnvironmentVariables(RecoverUnescapedJsonPath(options.DestinationDirectory)));
 
             Directory.CreateDirectory(directory);
             return new MongoRawEventLogger(directory);
@@ -45,6 +45,30 @@ internal sealed class MongoRawEventLogger
         {
             return null;
         }
+    }
+
+    // If the user wrote a single-backslash Windows path in JSON (e.g. "c:\raw_logs"), the
+    // JSON parser treated \r / \n / \t / \b / \f as control characters. Restore those as
+    // literal backslash + letter so the path behaves as the user intended.
+    private static string RecoverUnescapedJsonPath(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return path;
+
+        var sb = new StringBuilder(path.Length);
+        foreach (var c in path)
+        {
+            switch (c)
+            {
+                case '\b': sb.Append("\\b"); break;
+                case '\t': sb.Append("\\t"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\f': sb.Append("\\f"); break;
+                case '\r': sb.Append("\\r"); break;
+                default:  sb.Append(c);     break;
+            }
+        }
+        return sb.ToString();
     }
 
     public void DumpCommandStarted(CommandStartedEvent commandStartedEvent)

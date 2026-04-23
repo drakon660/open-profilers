@@ -31,6 +31,10 @@ internal sealed class MongoProfilerGrpcRelayHostedService : IHostedService
         if (_relayApp is null)
             return;
 
+        // Unblock any in-flight gRPC Subscribe streams so Kestrel can drain and stop.
+        var broadcaster = _serviceProvider.GetService<MongoProfilerEventChannelBroadcaster>();
+        broadcaster?.CompleteAllSubscribers();
+
         await _relayApp.StopAsync(cancellationToken);
         await _relayApp.DisposeAsync();
         _relayApp = null;

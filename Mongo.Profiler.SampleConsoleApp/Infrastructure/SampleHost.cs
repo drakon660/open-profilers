@@ -15,11 +15,9 @@ internal static class SampleHost
         var builder = Host.CreateApplicationBuilder(args);
         builder.Services.AddFeatureManagement(builder.Configuration.GetSection("FeatureManagement"));
 
-        builder.Services.AddMongoProfilerPublisher(relayOptions =>
-        {
-            relayOptions.Port = options.GrpcPort;
-            relayOptions.ListenOnAnyIp = false;
-        });
+        var broadcaster = new MongoProfilerEventChannelBroadcaster();
+        builder.Services.AddMongoProfilerBroadcaster(broadcaster);
+        builder.Services.AddSingleton(new GrpcRelayManager(broadcaster, options.GrpcPort));
 
         builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
         {

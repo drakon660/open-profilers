@@ -17,6 +17,14 @@ public sealed class MongoProfilerEventChannelBroadcaster : IMongoProfilerEventSi
         }
     }
 
+    public void CompleteAllSubscribers()
+    {
+        foreach (var subscriber in _subscribers.Values)
+        {
+            subscriber.Writer.TryComplete();
+        }
+    }
+
     public async IAsyncEnumerable<MongoProfilerQueryEvent> Subscribe([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var subscriberId = Guid.NewGuid();

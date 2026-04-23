@@ -12,6 +12,7 @@ public interface IMongoProfilerRelayHandle : IAsyncDisposable
 internal sealed class MongoProfilerRelayHandle : IMongoProfilerRelayHandle
 {
     private WebApplication? _relayApp;
+    private readonly MongoProfilerEventChannelBroadcaster _broadcaster;
 
     public MongoProfilerRelayHandle(
         WebApplication relayApp,
@@ -19,6 +20,7 @@ internal sealed class MongoProfilerRelayHandle : IMongoProfilerRelayHandle
         MongoProfilerRelayHostedServiceOptions options)
     {
         _relayApp = relayApp;
+        _broadcaster = broadcaster;
         Sink = broadcaster;
         Port = options.Port;
         Address = options.ListenOnAnyIp
@@ -34,6 +36,9 @@ internal sealed class MongoProfilerRelayHandle : IMongoProfilerRelayHandle
     {
         if (_relayApp is null)
             return;
+
+        // Unblock any in-flight gRPC Subscribe streams so Kestrel can drain and stop.
+        _broadcaster.CompleteAllSubscribers();
 
         await _relayApp.StopAsync();
         await _relayApp.DisposeAsync();

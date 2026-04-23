@@ -8,6 +8,10 @@ internal static class SampleCommandCatalog
     {
         return
         [
+            new("Relay", "Start gRPC relay", "Starts the on-demand gRPC relay so the Avalonia viewer can connect.", SampleCommands.StartGrpcRelayAsync),
+            new("Relay", "Stop gRPC relay", "Stops the gRPC relay and frees the port.", SampleCommands.StopGrpcRelayAsync),
+            new("Relay", "gRPC relay status", "Shows whether the relay is running.", SampleCommands.GrpcRelayStatusAsync),
+
             new("Setup", "Seed sample data", "Recreates the sample collection with predictable orders.", SampleCommands.SeedAsync),
             new("Setup", "Create collection", "Creates the configured sample collection if it is missing.", SampleCommands.CreateCollectionAsync),
             new("Setup", "Drop collection", "Drops the configured sample collection.", SampleCommands.DropCollectionAsync),
