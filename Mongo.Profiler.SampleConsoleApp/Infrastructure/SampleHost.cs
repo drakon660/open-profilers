@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.FeatureManagement;
+using Microsoft.Extensions.Options;
 using Mongo.Profiler;
 using Mongo.Profiler.Client;
 using Mongo.Profiler.SampleConsoleApp.Models;
@@ -10,53 +10,29 @@ namespace Mongo.Profiler.SampleConsoleApp.Infrastructure;
 
 internal static class SampleHost
 {
-    public static IHost Build(string[] args, SampleOptions options)
+    public static IHost Build(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
-        builder.Services.AddFeatureManagement(builder.Configuration.GetSection("FeatureManagement"));
+
+        builder.Services.Configure<SampleOptions>(builder.Configuration);
+        builder.Services.Configure<MongoProfilerOptions>(builder.Configuration.GetSection("MongoProfiler"));
 
         var broadcaster = new MongoProfilerEventChannelBroadcaster();
         builder.Services.AddMongoProfilerBroadcaster(broadcaster);
-        builder.Services.AddSingleton(new GrpcRelayManager(broadcaster, options.GrpcPort));
+        builder.Services.AddSingleton(serviceProvider =>
+        {
+            var sampleOptions = serviceProvider.GetRequiredService<IOptions<SampleOptions>>().Value;
+            return new GrpcRelayManager(broadcaster, sampleOptions.GrpcPort);
+        });
 
         builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
         {
-            var settings = MongoClientSettings.FromConnectionString(options.ConnectionString);
-            settings.ServerSelectionTimeout = TimeSpan.FromMilliseconds(Math.Clamp(options.MongoServerSelectionTimeoutMs, 250, 60_000));
-            settings.ConnectTimeout = TimeSpan.FromMilliseconds(Math.Clamp(options.MongoConnectTimeoutMs, 250, 60_000));
+            var sampleOptions = serviceProvider.GetRequiredService<IOptions<SampleOptions>>().Value;
+            var settings = MongoClientSettings.FromConnectionString(sampleOptions.ConnectionString);
+            settings.ServerSelectionTimeout = TimeSpan.FromMilliseconds(Math.Clamp(sampleOptions.MongoServerSelectionTimeoutMs, 250, 60_000));
+            settings.ConnectTimeout = TimeSpan.FromMilliseconds(Math.Clamp(sampleOptions.MongoConnectTimeoutMs, 250, 60_000));
 
-            var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
-            var featureManager = serviceProvider.GetRequiredService<IFeatureManager>();
-            var rawEventLoggingEnabled = featureManager
-                .IsEnabledAsync(SampleFeatureFlags.RawEventLogging)
-                .GetAwaiter()
-                .GetResult();
-
-            settings = settings.SubscribeToMongoQueries(
-                sink: sink,
-                options: new MongoProfilerOptions
-                {
-                    ApplicationName = "Mongo.Profiler.SampleConsoleApp",
-                    IndexAdvisor = new MongoProfilerIndexAdvisorOptions
-                    {
-                        Enabled = options.EnableIndexAdvisor,
-                        SlowQueryThresholdMs = options.IndexAdvisorSlowQueryThresholdMs,
-                        MinDocsExaminedForWarning = options.IndexAdvisorMinDocsExaminedForWarning,
-                        MaxAnalysesPerFingerprintPerMinute = options.IndexAdvisorMaxAnalysesPerFingerprintPerMinute,
-                        ExplainTimeoutMs = options.IndexAdvisorExplainTimeoutMs
-                    },
-                    Redaction = new MongoProfilerRedactionOptions
-                    {
-                        MaxStringLength = options.RedactionMaxStringLength,
-                        SensitiveKeys = options.RedactionSensitiveKeys
-                    },
-                    RawEvents = new MongoProfilerRawEventOptions
-                    {
-                        Enabled = rawEventLoggingEnabled,
-                        DestinationDirectory = options.RawEventLogsDirectory
-                    }
-                });
-
+            settings = settings.UseMongoProfiler(serviceProvider);
             return new MongoClient(settings);
         });
 

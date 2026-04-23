@@ -2,32 +2,32 @@ namespace Mongo.Profiler;
 
 public sealed class MongoProfilerOptions
 {
-    public string ApplicationName { get; init; } = string.Empty;
-    public MongoProfilerIndexAdvisorOptions IndexAdvisor { get; init; } = new();
-    public MongoProfilerRedactionOptions Redaction { get; init; } = new();
-    public MongoProfilerRawEventOptions RawEvents { get; init; } = new();
+    public string ApplicationName { get; set; } = string.Empty;
+    public MongoProfilerIndexAdvisorOptions IndexAdvisor { get; set; } = new();
+    public MongoProfilerRedactionOptions Redaction { get; set; } = new();
+    public MongoProfilerRawEventOptions RawEvents { get; set; } = new();
 }
 
 public sealed class MongoProfilerRawEventOptions
 {
-    public bool Enabled { get; init; }
-    public string? DestinationDirectory { get; init; }
+    public bool Enabled { get; set; }
+    public string? DestinationDirectory { get; set; }
 }
 
 public sealed class MongoProfilerIndexAdvisorOptions
 {
-    public bool Enabled { get; init; }
-    public int SlowQueryThresholdMs { get; init; } = 500;
-    public int MinDocsExaminedForWarning { get; init; } = 200;
-    public int MaxAnalysesPerFingerprintPerMinute { get; init; } = 1;
-    public int ExplainTimeoutMs { get; init; } = 1500;
+    public bool Enabled { get; set; }
+    public int SlowQueryThresholdMs { get; set; } = 500;
+    public int MinDocsExaminedForWarning { get; set; } = 200;
+    public int MaxAnalysesPerFingerprintPerMinute { get; set; } = 1;
+    public int ExplainTimeoutMs { get; set; } = 1500;
 }
 
 public sealed class MongoProfilerRedactionOptions
 {
-    public int MaxStringLength { get; init; } = 256;
+    public int MaxStringLength { get; set; } = 256;
 
-    public IReadOnlyCollection<string> SensitiveKeys { get; init; } =
+    public string[] SensitiveKeys { get; set; } =
     [
         "password",
         "passwd",

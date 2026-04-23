@@ -10,14 +10,57 @@ It builds on top of `Mongo.Profiler` and `Mongo.Profiler.Grpc`:
 
 ## Quick model
 
-- `AddMongoProfiler()` registers the in-process broadcaster and `IMongoProfilerEventSink`.
 - `AddMongoProfilerBroadcaster(...)` registers a caller-owned broadcaster as both the broadcaster and `IMongoProfilerEventSink`.
 - `AddMongoProfilerPublisher(...)` starts a background gRPC relay for worker or console hosts.
 - `MongoProfilerRelay.StartAsync(...)` starts the same relay for plain apps that do not use `HostBuilder`.
-- `UseMongoProfiler(serviceProvider)` is available from `Mongo.Profiler.Client.AspNet` for ASP.NET-style registrations.
+- `UseMongoProfiler(serviceProvider)` reads the sink and `IOptions<MongoProfilerOptions>` from DI and applies profiling. Available from both `Mongo.Profiler.Client` (worker / console) and `Mongo.Profiler.Client.AspNet`.
 - `UseMongoProfiler(sink, logger)` applies profiling to `MongoClientSettings` with an explicit sink.
 - `UseMongoProfiler(logger)` applies profiling for logging-only scenarios.
 - `MapMongoProfiler()` is only needed in ASP.NET apps that expose the gRPC subscription endpoint themselves.
+
+## Configuring profiler behavior
+
+`Mongo.Profiler.MongoProfilerOptions` controls application name, redaction, index advisor, and raw driver-event dumps. Bind it from configuration (standard `IOptions<T>` pattern) and `UseMongoProfiler(serviceProvider)` will pick it up automatically.
+
+```jsonc
+// appsettings.json
+"MongoProfiler": {
+  "ApplicationName": "MyApp",
+  "RawEvents": {
+    "Enabled": true,
+    "DestinationDirectory": "c:\\raw_logs"
+  },
+  "IndexAdvisor": {
+    "Enabled": true,
+    "SlowQueryThresholdMs": 500
+  },
+  "Redaction": {
+    "MaxStringLength": 256,
+    "SensitiveKeys": [ "password", "token" ]
+  }
+}
+```
+
+```csharp
+builder.Services.Configure<MongoProfilerOptions>(
+    builder.Configuration.GetSection("MongoProfiler"));
+```
+
+Imperative configuration also works when you prefer not to bind from `IConfiguration`:
+
+```csharp
+builder.Services.AddOptions<MongoProfilerOptions>().Configure(options =>
+{
+    options.ApplicationName = "MyApp";
+    options.RawEvents = new MongoProfilerRawEventOptions
+    {
+        Enabled = true,
+        DestinationDirectory = @"c:\raw_logs"
+    };
+});
+```
+
+If no `IOptions<MongoProfilerOptions>` is registered, `UseMongoProfiler(serviceProvider)` falls back to defaults (no raw-event dumps, no index advisor, built-in redaction defaults).
 
 ## ASP.NET Core app
 
@@ -62,11 +105,12 @@ builder.Services.AddMongoProfilerPublisher(options =>
     options.Port = 5179;
     options.ListenOnAnyIp = false; // true for container/remote access
 });
+builder.Services.Configure<MongoProfilerOptions>(
+    builder.Configuration.GetSection("MongoProfiler"));
 builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
 {
     var settings = MongoClientSettings.FromConnectionString("mongodb://localhost:27017");
-    var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
-    settings = settings.UseMongoProfiler(sink);
+    settings = settings.UseMongoProfiler(serviceProvider);
     return new MongoClient(settings);
 });
 ```
@@ -230,11 +274,11 @@ Point the viewer to the host and port that expose the gRPC `Subscribe` stream:
 
 ## Notes on sinks and DI
 
-- `AddMongoProfiler()` registers `MongoProfilerEventChannelBroadcaster` as the default `IMongoProfilerEventSink`.
-- `AddMongoProfilerBroadcaster(...)` registers a specific broadcaster instance that you already own.
-- `AddMongoProfilerPublisher(...)` includes `AddMongoProfiler()` and then hosts the relay.
+- `AddMongoProfilerBroadcaster(...)` registers a specific broadcaster instance that you already own and exposes it as `IMongoProfilerEventSink`.
+- `AddMongoProfilerPublisher(...)` registers the default broadcaster + `IMongoProfilerEventSink` and hosts the relay.
 - `MongoProfilerRelay.StartAsync(...)` is the non-DI, non-hosted equivalent when the app needs viewer streaming but does not already have a host.
 - The optional `sink` argument on `AddMongoProfilerPublisher(...)` is intended for supplying an existing broadcaster instance that should be shared with the relay host.
+- `settings.UseMongoProfiler(serviceProvider)` resolves both the sink and `IOptions<MongoProfilerOptions>` from DI in a single call, so you do not need to fetch them manually.
 
 ## Event behavior
 

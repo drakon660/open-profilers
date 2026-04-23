@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
 namespace Mongo.Profiler.Client;
@@ -63,7 +64,20 @@ public static class MongoProfilerExtensions
         ArgumentNullException.ThrowIfNull(sink);
         return settings.SubscribeToMongoQueries(logger, sink);
     }
-    
+
+    public static MongoClientSettings UseMongoProfiler(
+        this MongoClientSettings settings,
+        IServiceProvider serviceProvider,
+        ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
+        var profilerOptions = serviceProvider
+            .GetService<IOptions<MongoProfilerOptions>>()?.Value ?? new MongoProfilerOptions();
+        return settings.SubscribeToMongoQueries(logger, sink, profilerOptions);
+    }
+
     public static MongoClientSettings UseMongoProfiler(
         this MongoClientSettings settings,
         ILogger? logger = null)

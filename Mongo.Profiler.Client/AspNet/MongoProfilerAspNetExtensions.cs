@@ -70,11 +70,15 @@ public static class MongoProfilerAspNetExtensions
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(serviceProvider);
         var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
-        var relayOptions = serviceProvider.GetService<IOptions<MongoProfilerRelayHostedServiceOptions>>()?.Value;
-        var profilerOptions = new MongoProfilerOptions
+        var profilerOptions = serviceProvider.GetService<IOptions<MongoProfilerOptions>>()?.Value;
+        if (profilerOptions is null)
         {
-            ApplicationName = relayOptions?.ApplicationName ?? string.Empty
-        };
+            var relayOptions = serviceProvider.GetService<IOptions<MongoProfilerRelayHostedServiceOptions>>()?.Value;
+            profilerOptions = new MongoProfilerOptions
+            {
+                ApplicationName = relayOptions?.ApplicationName ?? string.Empty
+            };
+        }
         return settings.SubscribeToMongoQueries(logger, sink, profilerOptions);
     }
 

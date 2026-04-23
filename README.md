@@ -29,6 +29,8 @@ Package-specific setup, full code snippets, and DI guidance live in [`Mongo.Prof
 
 ```csharp
 builder.AddMongoProfiler(options => options.Port = 5179);
+builder.Services.Configure<MongoProfilerOptions>(
+    builder.Configuration.GetSection("MongoProfiler"));
 
 builder.Services.AddSingleton<IMongoClient>(sp =>
 {
@@ -40,7 +42,7 @@ var app = builder.Build();
 app.MapMongoProfiler();
 ```
 
-See the client README for worker/console (`AddMongoProfilerPublisher`) and plain-app (`MongoProfilerRelay.StartAsync`) variants.
+`UseMongoProfiler(sp)` resolves the sink and `IOptions<MongoProfilerOptions>` from DI. Configure runtime behavior (raw-event dumps, index advisor, redaction) through the bound `MongoProfiler` section. See the client README for worker/console (`AddMongoProfilerPublisher`) and plain-app (`MongoProfilerRelay.StartAsync`) variants.
 
 ## Enriched events
 

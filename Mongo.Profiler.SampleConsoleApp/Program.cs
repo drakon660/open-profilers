@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Mongo.Profiler.SampleConsoleApp.Commands;
 using Mongo.Profiler.SampleConsoleApp.ConsoleUi;
 using Mongo.Profiler.SampleConsoleApp.Infrastructure;
@@ -6,10 +7,10 @@ using Mongo.Profiler.SampleConsoleApp.Models;
 using MongoDB.Driver;
 using Spectre.Console;
 
-var options = SampleOptions.Load();
-using var host = SampleHost.Build(args, options);
+using var host = SampleHost.Build(args);
 await host.StartAsync();
 
+var options = host.Services.GetRequiredService<IOptions<SampleOptions>>().Value;
 var relayManager = host.Services.GetRequiredService<GrpcRelayManager>();
 var context = new SampleContext(
     host.Services.GetRequiredService<IMongoClient>(),
