@@ -9,12 +9,20 @@ namespace Mongo.Profiler.Client;
 
 public static class MongoProfilerExtensions
 {
+    /// <summary>
+    /// Conventional configuration section name bound to <see cref="MongoProfilerOptions"/>
+    /// when the registration helpers run. Override by calling
+    /// <c>services.Configure&lt;MongoProfilerOptions&gt;(...)</c> after registration.
+    /// </summary>
+    public const string DefaultConfigurationSection = "MongoProfiler";
+
     private static IServiceCollection AddMongoProfiler(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<MongoProfilerEventChannelBroadcaster>();
         services.TryAddSingleton<IMongoProfilerEventSink>(provider =>
             provider.GetRequiredService<MongoProfilerEventChannelBroadcaster>());
+        services.AddOptions<MongoProfilerOptions>().BindConfiguration(DefaultConfigurationSection);
         return services;
     }
 
@@ -27,6 +35,7 @@ public static class MongoProfilerExtensions
 
         services.AddSingleton(broadcaster);
         services.AddSingleton<IMongoProfilerEventSink>(broadcaster);
+        services.AddOptions<MongoProfilerOptions>().BindConfiguration(DefaultConfigurationSection);
         return services;
     }
 
@@ -73,6 +82,20 @@ public static class MongoProfilerExtensions
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(serviceProvider);
         var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
+        var profilerOptions = serviceProvider
+            .GetService<IOptions<MongoProfilerOptions>>()?.Value ?? new MongoProfilerOptions();
+        return settings.SubscribeToMongoQueries(logger, sink, profilerOptions);
+    }
+
+    public static MongoClientSettings UseMongoProfiler(
+        this MongoClientSettings settings,
+        IServiceProvider serviceProvider,
+        IMongoProfilerEventSink sink,
+        ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(sink);
         var profilerOptions = serviceProvider
             .GetService<IOptions<MongoProfilerOptions>>()?.Value ?? new MongoProfilerOptions();
         return settings.SubscribeToMongoQueries(logger, sink, profilerOptions);

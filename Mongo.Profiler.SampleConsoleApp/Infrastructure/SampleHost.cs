@@ -15,7 +15,6 @@ internal static class SampleHost
         var builder = Host.CreateApplicationBuilder(args);
 
         builder.Services.Configure<SampleOptions>(builder.Configuration);
-        builder.Services.Configure<MongoProfilerOptions>(builder.Configuration.GetSection("MongoProfiler"));
 
         var broadcaster = new MongoProfilerEventChannelBroadcaster();
         builder.Services.AddMongoProfilerBroadcaster(broadcaster);

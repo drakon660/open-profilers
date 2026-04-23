@@ -22,6 +22,7 @@ public static class MongoProfilerAspNetExtensions
         configure?.Invoke(profilerOptions);
 
         builder.Services.AddMongoProfilerGrpc();
+        builder.Services.AddOptions<MongoProfilerOptions>().BindConfiguration(MongoProfilerExtensions.DefaultConfigurationSection);
         if (!profilerOptions.Enabled)
             return builder;
 
