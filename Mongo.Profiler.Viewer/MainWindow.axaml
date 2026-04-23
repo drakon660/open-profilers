@@ -248,7 +248,7 @@
                                     BorderBrush="#D5D5D5"
                                     BorderThickness="0,0,0,1"
                                     Padding="8,6">
-                                <Grid ColumnDefinitions="Auto,10,160,8,160,8,140,8,*,8,Auto">
+                                <Grid ColumnDefinitions="Auto,10,160,8,160,8,140,8,*,8,Auto,6,Auto">
                                     <TextBlock Grid.Column="0"
                                                Text="Filters"
                                                FontWeight="Bold"
@@ -274,6 +274,10 @@
                                             x:Name="FilterClearButton"
                                             Content="Clear"
                                             Click="FilterClear_Click" />
+                                    <Button Grid.Column="12"
+                                            x:Name="ExportGrpcButton"
+                                            Content="Export"
+                                            Click="ExportGrpc_Click" />
                                 </Grid>
                             </Border>
                         <DataGrid x:Name="GrpcEventsGrid"

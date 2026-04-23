@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MongoDB.Bson;
@@ -14,7 +15,11 @@ namespace Mongo.Profiler;
 internal sealed class MongoRawEventLogger
 {
     private static readonly JsonWriterSettings BsonJsonSettings = new() { OutputMode = JsonOutputMode.RelaxedExtendedJson };
-    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
     private readonly string _rawLogsDirectory;
 
     private MongoRawEventLogger(string rawLogsDirectory)
@@ -327,8 +332,6 @@ internal sealed class MongoRawEventLogger
             var safeId = SanitizeIdentifier(identifier, "unknown");
             var safeEvent = SanitizeIdentifier(eventName, "event");
             var path = Path.Combine(_rawLogsDirectory, $"{safeId}_{safeEvent}.json");
-            payload["RawLogDirectory"] = _rawLogsDirectory;
-            payload["RawLogFilePath"] = path;
             var json = payload.ToJsonString(SerializerOptions);
             File.WriteAllText(path, json);
         }

@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Grpc.Net.Client;
 
 namespace Mongo.Profiler.Viewer;
@@ -180,6 +183,76 @@ public partial class MainWindow : Window
         FilterStatusBox.Text = string.Empty;
         FilterQueryBox.Text = string.Empty;
         ApplyGrpcFilter();
+    }
+
+    private async void ExportGrpc_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_grpcRows.Count == 0)
+        {
+            SetStatus("No rows to export.", StatusKind.Warning);
+            return;
+        }
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel is null)
+            return;
+
+        var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        var startLocation = await topLevel.StorageProvider.TryGetFolderFromPathAsync(desktopPath);
+        var suggestedName = $"grpc-events-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.json";
+
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export gRPC events",
+            SuggestedFileName = suggestedName,
+            DefaultExtension = "json",
+            ShowOverwritePrompt = true,
+            SuggestedStartLocation = startLocation,
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("JSON") { Patterns = new[] { "*.json" } }
+            }
+        });
+
+        if (file is null)
+            return;
+
+        try
+        {
+            var payload = _grpcRows.Select(row => new
+            {
+                unixTimeMs = row.UnixTimeMs,
+                queryCount = row.QueryCount,
+                avgDurationMs = row.AvgDurationMs,
+                durationMs = row.DurationMs,
+                status = row.Status,
+                commandName = row.CommandName,
+                sessionId = row.SessionId,
+                serverEndpoint = row.ServerEndpoint,
+                operationId = row.OperationId,
+                resultCount = row.ResultCount,
+                errorCode = row.ErrorCode,
+                errorCodeName = row.ErrorCodeName,
+                error = row.Error,
+                fingerprint = row.Fingerprint,
+                winningPlanSummary = row.WinningPlanSummary,
+                shortQuery = row.ShortQuery,
+                fullQuery = row.FullQuery,
+                originalCommand = row.OriginalCommand
+            }).ToList();
+
+            await using var stream = await file.OpenWriteAsync();
+            await JsonSerializer.SerializeAsync(stream, payload, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+            SetStatus($"Exported {payload.Count} rows to {file.Name}.", StatusKind.Info);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Export failed: {ex.Message}", StatusKind.Error);
+        }
     }
 
     private void LoadSampleRows_Click(object? sender, RoutedEventArgs e)
