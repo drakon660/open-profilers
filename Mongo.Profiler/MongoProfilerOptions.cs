@@ -5,6 +5,13 @@ public sealed class MongoProfilerOptions
     public string ApplicationName { get; init; } = string.Empty;
     public MongoProfilerIndexAdvisorOptions IndexAdvisor { get; init; } = new();
     public MongoProfilerRedactionOptions Redaction { get; init; } = new();
+    public MongoProfilerRawEventOptions RawEvents { get; init; } = new();
+}
+
+public sealed class MongoProfilerRawEventOptions
+{
+    public bool Enabled { get; init; }
+    public string? DestinationDirectory { get; init; }
 }
 
 public sealed class MongoProfilerIndexAdvisorOptions

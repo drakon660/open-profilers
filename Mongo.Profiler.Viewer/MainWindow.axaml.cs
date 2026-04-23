@@ -42,7 +42,6 @@ public partial class MainWindow : Window
         GrpcEventsGrid.ItemsSource = _grpcRows;
         ProfileEventsGrid.ItemsSource = _profileRows;
         DataDetailsGrid.ItemsSource = _dataDetailsRows;
-        AddSampleRows();
         AppDomain.CurrentDomain.UnhandledException += _unhandledExceptionHandler;
         TaskScheduler.UnobservedTaskException += _unobservedTaskExceptionHandler;
         SetStatus("Ready.", StatusKind.Info);
@@ -60,6 +59,7 @@ public partial class MainWindow : Window
 
     private void AddSampleRows()
     {
+        ClearRows();
         var now = DateTimeOffset.UtcNow;
         const string grpcQuery = "{ \"find\" : \"orders\", \"filter\" : { \"status\" : \"open\" }, \"limit\" : 20 }";
         const string profileCommand = "{ \"find\" : \"orders\", \"filter\" : { \"customerId\" : 42 }, \"sort\" : { \"createdAt\" : -1 } }";
@@ -104,6 +104,12 @@ public partial class MainWindow : Window
         GrpcEventsGrid.SelectedItem = grpcRow;
         ProfileEventsGrid.SelectedItem = profileRow;
         _showingSampleRows = true;
+        SetStatus("Sample grid data loaded.", StatusKind.Info);
+    }
+
+    private void LoadSampleRows_Click(object? sender, RoutedEventArgs e)
+    {
+        AddSampleRows();
     }
 
     private void RemoveSampleRows()

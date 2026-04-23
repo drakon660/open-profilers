@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.FeatureManagement;
 using Mongo.Profiler;
 using Mongo.Profiler.Client;
 using Mongo.Profiler.SampleConsoleApp.Models;
@@ -12,6 +13,7 @@ internal static class SampleHost
     public static IHost Build(string[] args, SampleOptions options)
     {
         var builder = Host.CreateApplicationBuilder(args);
+        builder.Services.AddFeatureManagement(builder.Configuration.GetSection("FeatureManagement"));
 
         builder.Services.AddMongoProfilerPublisher(relayOptions =>
         {
@@ -26,6 +28,12 @@ internal static class SampleHost
             settings.ConnectTimeout = TimeSpan.FromMilliseconds(Math.Clamp(options.MongoConnectTimeoutMs, 250, 60_000));
 
             var sink = serviceProvider.GetRequiredService<IMongoProfilerEventSink>();
+            var featureManager = serviceProvider.GetRequiredService<IFeatureManager>();
+            var rawEventLoggingEnabled = featureManager
+                .IsEnabledAsync(SampleFeatureFlags.RawEventLogging)
+                .GetAwaiter()
+                .GetResult();
+
             settings = settings.SubscribeToMongoQueries(
                 sink: sink,
                 options: new MongoProfilerOptions
@@ -43,6 +51,11 @@ internal static class SampleHost
                     {
                         MaxStringLength = options.RedactionMaxStringLength,
                         SensitiveKeys = options.RedactionSensitiveKeys
+                    },
+                    RawEvents = new MongoProfilerRawEventOptions
+                    {
+                        Enabled = rawEventLoggingEnabled,
+                        DestinationDirectory = options.RawEventLogsDirectory
                     }
                 });
 

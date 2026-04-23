@@ -54,13 +54,18 @@ public partial class MainWindow
 
     private void Clear_Click(object? sender, RoutedEventArgs e)
     {
+        ClearRows();
+        SetStatus("Cleared captured events.", StatusKind.Info);
+    }
+
+    private void ClearRows()
+    {
         _grpcAllEvents.Clear();
         _profileRows.Clear();
         _directProfileSeenKeys.Clear();
         _grpcRows.Clear();
         _showingSampleRows = false;
         ClearDetailsPanel();
-        SetStatus("Cleared captured events.", StatusKind.Info);
     }
 
     private void GrpcEventsGrid_SelectionChanged(object? sender, SelectionChangedEventArgs e)

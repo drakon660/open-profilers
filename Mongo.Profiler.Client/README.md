@@ -80,6 +80,8 @@ Optionally wait until viewer connects before executing workload:
 await host.Services.WaitForMongoProfilerSubscriberAsync();
 ```
 
+`Mongo.Profiler.SampleConsoleApp` is the reference generic-host console sample. It uses `AddMongoProfilerPublisher(...)`, starts the relay, and presents a Spectre.Console menu of read, write, aggregate, admin, transaction, change stream, and raw-command scenarios.
+
 ## Plain app without `HostBuilder`
 
 If the app does not use `HostBuilder` or ASP.NET hosting, start the relay explicitly and use the returned sink when creating `MongoClientSettings`:
@@ -243,6 +245,8 @@ The underlying instrumentation in `Mongo.Profiler` can:
 - include request and reply metadata such as result counts, cursor IDs, payload sizes, and error details
 - emit query fingerprints and trace identifiers
 - run optional index-advice analysis for slow `find` and `aggregate` operations when configured through the core `MongoProfilerOptions`
+
+When `MongoProfilerOptions.RawEvents.Enabled` is set, the core instrumentation writes best-effort raw driver event JSON files to `MongoProfilerOptions.RawEvents.DestinationDirectory`. If no destination is supplied, it uses the user's local application data directory under `Mongo.Profiler/raw_logs`. Those dumps include every readable public property from each captured driver event, with BSON payloads preserved as relaxed extended JSON, and are intended for diagnostics rather than the gRPC viewer contract.
 
 ## Packaging (maintainers)
 

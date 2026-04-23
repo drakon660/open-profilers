@@ -10,7 +10,7 @@
 - `Mongo.Profiler.Grpc`: gRPC contract and subscriber service.
 - `Mongo.Profiler.Viewer`: Avalonia desktop viewer for Mongo profiler events.
 - `EFCore.Profiler` and `EFCore.Profiler.Viewer`: EF Core-oriented profiling pieces and viewer.
-- `Mongo.Profiler.SampleApi`, `Mongo.Profiler.SampleConsoleApp`, `Mongo.Profiler.Samples`: runnable examples.
+- `Mongo.Profiler.SampleApi`, `Mongo.Profiler.SampleConsoleApp`, `Mongo.Profiler.Samples`: runnable examples and validation harnesses.
 - `Mongo.Profiler.Tests`: test project for core formatting behavior.
 
 ## Current integration model
@@ -49,7 +49,7 @@ Published `MongoProfilerQueryEvent` messages carry command metadata, query finge
 ## Running samples
 
 - `Mongo.Profiler.SampleApi`: sample web API using ASP.NET and EF Core integration.
-- `Mongo.Profiler.SampleConsoleApp`: simple hosted console sample.
+- `Mongo.Profiler.SampleConsoleApp`: Spectre.Console hosted sample with an interactive Mongo command catalog for exercising profiler coverage. See [`Mongo.Profiler.SampleConsoleApp/README.md`](Mongo.Profiler.SampleConsoleApp/README.md).
 - `Mongo.Profiler.Samples`: interactive sample that can seed data, run reads and writes, trigger failures, and append benchmark results to `BENCHMARK_RESULTS.md`. Scenarios are documented in [`Mongo.Profiler.Samples/VALIDATION_SCENARIOS.md`](Mongo.Profiler.Samples/VALIDATION_SCENARIOS.md).
 
 ## Notes

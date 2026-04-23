@@ -14,6 +14,7 @@ internal sealed class SampleOptions
     public int IndexAdvisorMaxAnalysesPerFingerprintPerMinute { get; set; } = 1;
     public int IndexAdvisorExplainTimeoutMs { get; set; } = 1500;
     public int RedactionMaxStringLength { get; set; } = 256;
+    public string RawEventLogsDirectory { get; set; } = "raw_logs";
     public int MongoServerSelectionTimeoutMs { get; set; } = 1500;
     public int MongoConnectTimeoutMs { get; set; } = 1500;
     public string[] RedactionSensitiveKeys { get; set; } =

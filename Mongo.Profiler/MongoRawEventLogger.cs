@@ -11,13 +11,38 @@ using MongoDB.Driver.Core.Events;
 
 namespace Mongo.Profiler;
 
-internal static class MongoRawEventLogger
+internal sealed class MongoRawEventLogger
 {
-    private static readonly string RawLogsDirectory = InitializeRawLogsDirectory();
     private static readonly JsonWriterSettings BsonJsonSettings = new() { OutputMode = JsonOutputMode.RelaxedExtendedJson };
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+    private readonly string _rawLogsDirectory;
 
-    public static void DumpCommandStarted(CommandStartedEvent commandStartedEvent)
+    private MongoRawEventLogger(string rawLogsDirectory)
+    {
+        _rawLogsDirectory = rawLogsDirectory;
+    }
+
+    public static MongoRawEventLogger? Create(MongoProfilerRawEventOptions options)
+    {
+        if (!options.Enabled)
+            return null;
+
+        try
+        {
+            var directory = string.IsNullOrWhiteSpace(options.DestinationDirectory)
+                ? GetDefaultRawLogsDirectory()
+                : Path.GetFullPath(Environment.ExpandEnvironmentVariables(options.DestinationDirectory));
+
+            Directory.CreateDirectory(directory);
+            return new MongoRawEventLogger(directory);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public void DumpCommandStarted(CommandStartedEvent commandStartedEvent)
     {
         var payload = CreatePayload(commandStartedEvent);
         payload["DatabaseNamespace"] = commandStartedEvent.DatabaseNamespace?.ToString();
@@ -29,7 +54,7 @@ internal static class MongoRawEventLogger
         Write(commandStartedEvent.RequestId.ToString(), nameof(CommandStartedEvent), payload);
     }
 
-    public static void DumpCommandSucceeded(CommandSucceededEvent commandSucceededEvent)
+    public void DumpCommandSucceeded(CommandSucceededEvent commandSucceededEvent)
     {
         var payload = CreatePayload(commandSucceededEvent);
         payload["DurationMs"] = commandSucceededEvent.Duration.TotalMilliseconds;
@@ -41,7 +66,7 @@ internal static class MongoRawEventLogger
         Write(commandSucceededEvent.RequestId.ToString(), nameof(CommandSucceededEvent), payload);
     }
 
-    public static void DumpCommandFailed(CommandFailedEvent commandFailedEvent)
+    public void DumpCommandFailed(CommandFailedEvent commandFailedEvent)
     {
         var payload = CreatePayload(commandFailedEvent);
         payload["DurationMs"] = commandFailedEvent.Duration.TotalMilliseconds;
@@ -56,7 +81,7 @@ internal static class MongoRawEventLogger
         Write(commandFailedEvent.RequestId.ToString(), nameof(CommandFailedEvent), payload);
     }
 
-    public static void DumpClusterDescriptionChanged(ClusterDescriptionChangedEvent changedEvent)
+    public void DumpClusterDescriptionChanged(ClusterDescriptionChangedEvent changedEvent)
     {
         var payload = CreatePayload(changedEvent);
         payload["OldDescription"] = DescribeCluster(changedEvent.OldDescription);
@@ -65,7 +90,7 @@ internal static class MongoRawEventLogger
         Write("cluster", nameof(ClusterDescriptionChangedEvent), payload);
     }
 
-    public static void DumpServerHeartbeatFailed(ServerHeartbeatFailedEvent heartbeatFailedEvent)
+    public void DumpServerHeartbeatFailed(ServerHeartbeatFailedEvent heartbeatFailedEvent)
     {
         var endpoint = heartbeatFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
         var payload = CreatePayload(heartbeatFailedEvent);
@@ -80,7 +105,7 @@ internal static class MongoRawEventLogger
         Write(SanitizeIdentifier(endpoint, "heartbeat"), nameof(ServerHeartbeatFailedEvent), payload);
     }
 
-    public static void DumpServerHeartbeatSucceeded(ServerHeartbeatSucceededEvent heartbeatSucceededEvent)
+    public void DumpServerHeartbeatSucceeded(ServerHeartbeatSucceededEvent heartbeatSucceededEvent)
     {
         var endpoint = heartbeatSucceededEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
         var payload = CreatePayload(heartbeatSucceededEvent);
@@ -93,7 +118,7 @@ internal static class MongoRawEventLogger
         Write(SanitizeIdentifier(endpoint, "heartbeat"), nameof(ServerHeartbeatSucceededEvent), payload);
     }
 
-    public static void DumpConnectionOpeningFailed(ConnectionOpeningFailedEvent connectionOpeningFailedEvent)
+    public void DumpConnectionOpeningFailed(ConnectionOpeningFailedEvent connectionOpeningFailedEvent)
     {
         var endpoint = connectionOpeningFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
         var payload = CreatePayload(connectionOpeningFailedEvent);
@@ -292,16 +317,18 @@ internal static class MongoRawEventLogger
         return node is not null;
     }
 
-    private static void Write(string identifier, string eventName, JsonObject payload)
+    private void Write(string identifier, string eventName, JsonObject payload)
     {
-        if (string.IsNullOrEmpty(RawLogsDirectory))
+        if (string.IsNullOrEmpty(_rawLogsDirectory))
             return;
 
         try
         {
             var safeId = SanitizeIdentifier(identifier, "unknown");
             var safeEvent = SanitizeIdentifier(eventName, "event");
-            var path = Path.Combine(RawLogsDirectory, $"{safeId}_{safeEvent}.json");
+            var path = Path.Combine(_rawLogsDirectory, $"{safeId}_{safeEvent}.json");
+            payload["RawLogDirectory"] = _rawLogsDirectory;
+            payload["RawLogFilePath"] = path;
             var json = payload.ToJsonString(SerializerOptions);
             File.WriteAllText(path, json);
         }
@@ -323,20 +350,11 @@ internal static class MongoRawEventLogger
         return sb.ToString();
     }
 
-    private static string InitializeRawLogsDirectory()
+    private static string GetDefaultRawLogsDirectory()
     {
-        try
-        {
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Mongo.Profiler",
-                "raw_logs");
-            Directory.CreateDirectory(dir);
-            return dir;
-        }
-        catch
-        {
-            return string.Empty;
-        }
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Mongo.Profiler",
+            "raw_logs");
     }
 }

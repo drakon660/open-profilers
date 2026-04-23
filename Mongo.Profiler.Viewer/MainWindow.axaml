@@ -149,14 +149,15 @@
 
         <Border Grid.Row="1" Background="#E8762F" Padding="10,8">
             <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
-                <Grid Grid.Row="0" ColumnDefinitions="Auto,16,110,8,80,12,Auto,8,Auto,8,Auto,12,*">
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,16,110,8,80,12,Auto,8,Auto,8,Auto,8,Auto,12,*">
                     <TextBlock Grid.Column="0" Text="Mongo Profiler" FontWeight="Bold" FontSize="22" Foreground="White" VerticalAlignment="Center" />
                     <TextBox x:Name="HostBox" Grid.Column="2" Text="localhost" Watermark="gRPC Host" />
                     <TextBox x:Name="PortBox" Grid.Column="4" Text="5179" Watermark="gRPC Port" />
                     <Button Grid.Column="6" Content="Connect" Click="Connect_Click" />
                     <Button x:Name="DisconnectButton" Grid.Column="8" Content="Disconnect" IsEnabled="False" Click="Disconnect_Click" />
                     <Button Grid.Column="10" Content="Clear" Click="Clear_Click" />
-                    <TextBlock x:Name="StatusText" Grid.Column="12" Text="Disconnected" Foreground="White" VerticalAlignment="Center"
+                    <Button Grid.Column="12" Content="Load sample data" Click="LoadSampleRows_Click" />
+                    <TextBlock x:Name="StatusText" Grid.Column="14" Text="Disconnected" Foreground="White" VerticalAlignment="Center"
                                HorizontalAlignment="Right" FontWeight="SemiBold" />
                 </Grid>
 

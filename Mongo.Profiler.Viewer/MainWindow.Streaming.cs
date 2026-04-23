@@ -418,7 +418,9 @@ public partial class MainWindow
             .GroupBy(GetGroupingKey)
             .Select(group =>
             {
-                var latest = group.Last();
+                var latest = group
+                    .OrderByDescending(e => e.UnixTimeMs)
+                    .First();
                 var count = group.Count();
                 var avgDurationMs = group.Average(e => e.DurationMs);
                 var hasFailure = group.Any(e => string.Equals(e.Status, "failed", StringComparison.OrdinalIgnoreCase));
@@ -446,7 +448,7 @@ public partial class MainWindow
                     OriginalCommand = latest.OriginalCommand
                 };
             })
-            .OrderByDescending(row => row.DurationMs)
+            .OrderByDescending(row => row.UnixTimeMs)
             .ThenByDescending(row => row.QueryCount)
             .ToList();
 

@@ -32,6 +32,7 @@ public static class MongoClientSettingsExtensions
         var applicationName = string.IsNullOrWhiteSpace(options.ApplicationName)
             ? Assembly.GetEntryAssembly()?.GetName().Name ?? string.Empty
             : options.ApplicationName;
+        var rawEventLogger = MongoRawEventLogger.Create(options.RawEvents);
 
         var existingClusterConfigurator = settings.ClusterConfigurator;
         var commandByRequestId = new ConcurrentDictionary<int, CommandEnvelope>();
@@ -49,7 +50,7 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<CommandStartedEvent>(commandStartedEvent =>
             {
-                MongoRawEventLogger.DumpCommandStarted(commandStartedEvent);
+                rawEventLogger?.DumpCommandStarted(commandStartedEvent);
                 
                 if (ShouldSkipCommand(commandStartedEvent.CommandName, commandStartedEvent.Command))
                     return;
@@ -80,7 +81,7 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<CommandSucceededEvent>(commandSucceededEvent =>
             {
-                MongoRawEventLogger.DumpCommandSucceeded(commandSucceededEvent);
+                rawEventLogger?.DumpCommandSucceeded(commandSucceededEvent);
                 
                 if (!commandByRequestId.TryRemove(commandSucceededEvent.RequestId, out var commandEnvelope))
                     return;
@@ -95,7 +96,7 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<CommandFailedEvent>(commandFailedEvent =>
             {
-                MongoRawEventLogger.DumpCommandFailed(commandFailedEvent);
+                rawEventLogger?.DumpCommandFailed(commandFailedEvent);
                 
                 if (!commandByRequestId.TryRemove(commandFailedEvent.RequestId, out var commandEnvelope))
                     return;
@@ -110,7 +111,7 @@ public static class MongoClientSettingsExtensions
             
             clusterBuilder.Subscribe<ClusterDescriptionChangedEvent>(changedEvent =>
             {
-                MongoRawEventLogger.DumpClusterDescriptionChanged(changedEvent);
+                rawEventLogger?.DumpClusterDescriptionChanged(changedEvent);
                 
                 var oldDescription = changedEvent.OldDescription;
                 var newDescription = changedEvent.NewDescription;
@@ -122,6 +123,8 @@ public static class MongoClientSettingsExtensions
             
             clusterBuilder.Subscribe<ServerHeartbeatFailedEvent>(heartbeatFailedEvent =>
             {
+                rawEventLogger?.DumpServerHeartbeatFailed(heartbeatFailedEvent);
+
                 var endpoint = heartbeatFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
                 var now = DateTimeOffset.UtcNow;
                 if (lastHeartbeatFailureByEndpoint.TryGetValue(endpoint, out var last) && now - last < heartbeatDebounce)
@@ -139,6 +142,8 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<ServerHeartbeatSucceededEvent>(heartbeatSucceededEvent =>
             {
+                rawEventLogger?.DumpServerHeartbeatSucceeded(heartbeatSucceededEvent);
+
                 var endpoint = heartbeatSucceededEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
                 if (!lastHeartbeatFailureByEndpoint.TryRemove(endpoint, out _))
                     return;
@@ -148,6 +153,8 @@ public static class MongoClientSettingsExtensions
 
             clusterBuilder.Subscribe<ConnectionOpeningFailedEvent>(connectionOpeningFailedEvent =>
             {
+                rawEventLogger?.DumpConnectionOpeningFailed(connectionOpeningFailedEvent);
+
                 var endpoint = connectionOpeningFailedEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
                 var now = DateTimeOffset.UtcNow;
                 if (lastConnectionFailureByEndpoint.TryGetValue(endpoint, out var last) && now - last < connectionFailureDebounce)

@@ -72,6 +72,20 @@ The emitted `query` string is sanitized before publishing.
 - String values longer than `RedactionMaxStringLength` are truncated with `...[truncated]`.
 - Redaction settings are configured through `MongoProfilerOptions.Redaction` (sample values in `Mongo.Profiler.Samples/appsettings.json`).
 
+## Raw driver event dumps
+
+When `MongoProfilerOptions.RawEvents.Enabled` is set, `MongoRawEventLogger` writes best-effort raw JSON diagnostics to `MongoProfilerOptions.RawEvents.DestinationDirectory`. If no destination is supplied, it uses the user's local application data directory under `Mongo.Profiler/raw_logs`.
+
+These files are not part of the published gRPC `ProfilerEvent` schema. They are intended for local troubleshooting and include:
+
+- event type and dump timestamp
+- every readable public property exposed by the MongoDB driver event object
+- BSON command/reply payloads as relaxed extended JSON
+- expanded exception data for failed command, heartbeat, and connection events
+- normalized convenience fields such as `ServerEndpoint`, `DurationMs`, and stringified connection id values
+
+Raw dump failures are swallowed so diagnostics never affect application execution.
+
 ## Viewer-only direct `system.profile` fields (Avalonia)
 
 These fields are derived from Mongo profiler documents and shown in the `system.profile` grid model.
