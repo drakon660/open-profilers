@@ -103,6 +103,18 @@ public static class MongoProfilerExtensions
 
     public static MongoClientSettings UseMongoProfiler(
         this MongoClientSettings settings,
+        IMongoProfilerEventSink sink,
+        MongoProfilerOptions profilerOptions,
+        ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(sink);
+        ArgumentNullException.ThrowIfNull(profilerOptions);
+        return settings.SubscribeToMongoQueries(logger, sink, profilerOptions);
+    }
+    
+    public static MongoClientSettings UseMongoProfiler(
+        this MongoClientSettings settings,
         ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(settings);

@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
@@ -41,6 +43,8 @@ public static class MongoClientSettingsExtensions
         var heartbeatDebounce = TimeSpan.FromSeconds(10);
         var lastConnectionFailureByEndpoint = new ConcurrentDictionary<string, DateTimeOffset>();
         var connectionFailureDebounce = TimeSpan.FromSeconds(10);
+        string? lastFailedConnectivitySignature = null;
+        var failedConnectivitySignatureLock = new object();
 
         settings.ClusterConfigurator = clusterBuilder =>
         {
@@ -112,11 +116,29 @@ public static class MongoClientSettingsExtensions
             clusterBuilder.Subscribe<ClusterDescriptionChangedEvent>(changedEvent =>
             {
                 rawEventLogger?.DumpClusterDescriptionChanged(changedEvent);
-                
+
                 var oldDescription = changedEvent.OldDescription;
                 var newDescription = changedEvent.NewDescription;
                 if (oldDescription.State == newDescription.State && oldDescription.Type == newDescription.Type)
                     return;
+
+                if (newDescription.State != ClusterState.Connected)
+                {
+                    var signature = BuildConnectivitySignature(oldDescription, newDescription);
+                    lock (failedConnectivitySignatureLock)
+                    {
+                        if (string.Equals(lastFailedConnectivitySignature, signature, StringComparison.Ordinal))
+                            return;
+                        lastFailedConnectivitySignature = signature;
+                    }
+                }
+                else
+                {
+                    lock (failedConnectivitySignatureLock)
+                    {
+                        lastFailedConnectivitySignature = null;
+                    }
+                }
 
                 PublishConnectivityEvent(sink, applicationName, oldDescription, newDescription, logger);
             });
@@ -241,7 +263,8 @@ public static class MongoClientSettingsExtensions
         ClusterDescription newDescription,
         ILogger? logger)
     {
-        var endpoints = string.Join(",", newDescription.Servers.Select(server => server.EndPoint?.ToString() ?? string.Empty));
+        var endpoints = string.Join(",", newDescription.Servers
+            .Select(server => FormatEndpoint(server.EndPoint?.ToString())));
         var heartbeatError = newDescription.Servers
             .Select(server => server.HeartbeatException?.Message)
             .FirstOrDefault(message => !string.IsNullOrWhiteSpace(message));
@@ -269,18 +292,93 @@ public static class MongoClientSettingsExtensions
                 CommandName = "connectivity",
                 DatabaseName = string.Empty,
                 CollectionName = string.Empty,
-                Query = transition,
+                Query = SerializeClusterTransition(oldDescription, newDescription),
                 DurationMs = 0,
                 Success = success,
                 ErrorMessage = errorMessage,
                 ServerEndpoint = endpoints,
-                QueryFingerprint = "SYSTEM:CONNECTIVITY"
+                QueryFingerprint = $"SYSTEM:CONNECTIVITY:{DateTimeOffset.UtcNow.Ticks}"
             });
         }
         catch
         {
             // Connectivity diagnostics must never affect application execution.
         }
+    }
+
+    private static string SerializeClusterTransition(ClusterDescription oldDescription, ClusterDescription newDescription)
+    {
+        var payload = new JsonObject
+        {
+            ["Old"] = DescribeCluster(oldDescription),
+            ["New"] = DescribeCluster(newDescription)
+        };
+        return payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static JsonObject DescribeCluster(ClusterDescription description)
+    {
+        var servers = new JsonArray();
+        foreach (var server in description.Servers)
+        {
+            servers.Add(new JsonObject
+            {
+                ["Endpoint"] = FormatEndpoint(server.EndPoint?.ToString()),
+                ["Type"] = server.Type.ToString(),
+                ["State"] = server.State.ToString(),
+                ["HeartbeatException"] = server.HeartbeatException?.Message
+            });
+        }
+
+        return new JsonObject
+        {
+            ["State"] = description.State.ToString(),
+            ["Type"] = description.Type.ToString(),
+            ["Servers"] = servers
+        };
+    }
+
+    private static string FormatEndpoint(string? endpoint)
+    {
+        if (string.IsNullOrEmpty(endpoint))
+            return string.Empty;
+
+        const string unspecifiedPrefix = "Unspecified/";
+        return endpoint.StartsWith(unspecifiedPrefix, StringComparison.Ordinal)
+            ? endpoint[unspecifiedPrefix.Length..]
+            : endpoint;
+    }
+
+    private static string BuildConnectivitySignature(ClusterDescription oldDescription, ClusterDescription newDescription)
+    {
+        var sb = new StringBuilder();
+        AppendClusterSignature(sb, oldDescription);
+        sb.Append("=>");
+        AppendClusterSignature(sb, newDescription);
+        return sb.ToString();
+    }
+
+    private static void AppendClusterSignature(StringBuilder sb, ClusterDescription description)
+    {
+        sb.Append(description.State).Append('|').Append(description.Type).Append('[');
+        var ordered = description.Servers
+            .Select(server => new
+            {
+                Endpoint = FormatEndpoint(server.EndPoint?.ToString()),
+                State = server.State.ToString(),
+                Type = server.Type.ToString(),
+                HeartbeatError = server.HeartbeatException?.Message ?? string.Empty
+            })
+            .OrderBy(entry => entry.Endpoint, StringComparer.Ordinal);
+        var first = true;
+        foreach (var entry in ordered)
+        {
+            if (!first)
+                sb.Append(',');
+            first = false;
+            sb.Append(entry.Endpoint).Append(':').Append(entry.State).Append(':').Append(entry.Type).Append(':').Append(entry.HeartbeatError);
+        }
+        sb.Append(']');
     }
 
     private static void PublishConnectionOpeningFailedEvent(

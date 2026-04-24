@@ -20,11 +20,15 @@ internal sealed class MongoRawEventLogger
         WriteIndented = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-    private readonly string _rawLogsDirectory;
+    private static readonly IReadOnlySet<string> ReplyOnlyExclusion = new HashSet<string>(StringComparer.Ordinal) { "Reply" };
 
-    private MongoRawEventLogger(string rawLogsDirectory)
+    private readonly string _rawLogsDirectory;
+    private readonly bool _enableReplySerializing;
+
+    private MongoRawEventLogger(string rawLogsDirectory, bool enableReplySerializing)
     {
         _rawLogsDirectory = rawLogsDirectory;
+        _enableReplySerializing = enableReplySerializing;
     }
 
     public static MongoRawEventLogger? Create(MongoProfilerRawEventOptions options)
@@ -39,7 +43,7 @@ internal sealed class MongoRawEventLogger
                 : Path.GetFullPath(Environment.ExpandEnvironmentVariables(RecoverUnescapedJsonPath(options.DestinationDirectory)));
 
             Directory.CreateDirectory(directory);
-            return new MongoRawEventLogger(directory);
+            return new MongoRawEventLogger(directory, options.EnableReplySerializing);
         }
         catch
         {
@@ -85,12 +89,13 @@ internal sealed class MongoRawEventLogger
 
     public void DumpCommandSucceeded(CommandSucceededEvent commandSucceededEvent)
     {
-        var payload = CreatePayload(commandSucceededEvent);
+        var payload = CreatePayload(commandSucceededEvent, _enableReplySerializing ? null : ReplyOnlyExclusion);
         payload["DurationMs"] = commandSucceededEvent.Duration.TotalMilliseconds;
         payload["ConnectionId"] = ObjectToNode(commandSucceededEvent.ConnectionId);
         payload["ConnectionIdText"] = commandSucceededEvent.ConnectionId?.ToString();
         payload["ServerEndpoint"] = commandSucceededEvent.ConnectionId?.ServerId?.EndPoint?.ToString();
-        payload["Reply"] = BsonToNode(commandSucceededEvent.Reply);
+        if (_enableReplySerializing)
+            payload["Reply"] = BsonToNode(commandSucceededEvent.Reply);
 
         Write(commandSucceededEvent.RequestId.ToString(), nameof(CommandSucceededEvent), payload);
     }
@@ -137,12 +142,13 @@ internal sealed class MongoRawEventLogger
     public void DumpServerHeartbeatSucceeded(ServerHeartbeatSucceededEvent heartbeatSucceededEvent)
     {
         var endpoint = heartbeatSucceededEvent.ConnectionId?.ServerId?.EndPoint?.ToString() ?? string.Empty;
-        var payload = CreatePayload(heartbeatSucceededEvent);
+        var payload = CreatePayload(heartbeatSucceededEvent, _enableReplySerializing ? null : ReplyOnlyExclusion);
         payload["Endpoint"] = endpoint;
         payload["ConnectionId"] = ObjectToNode(heartbeatSucceededEvent.ConnectionId);
         payload["ConnectionIdText"] = heartbeatSucceededEvent.ConnectionId?.ToString();
         payload["DurationMs"] = heartbeatSucceededEvent.Duration.TotalMilliseconds;
-        payload["Reply"] = BsonToNode(heartbeatSucceededEvent.Reply);
+        if (_enableReplySerializing)
+            payload["Reply"] = BsonToNode(heartbeatSucceededEvent.Reply);
 
         Write(SanitizeIdentifier(endpoint, "heartbeat"), nameof(ServerHeartbeatSucceededEvent), payload);
     }
@@ -162,7 +168,7 @@ internal sealed class MongoRawEventLogger
         Write(SanitizeIdentifier(endpoint, "connection"), nameof(ConnectionOpeningFailedEvent), payload);
     }
 
-    private static JsonObject CreatePayload<TEvent>(TEvent eventData)
+    private static JsonObject CreatePayload<TEvent>(TEvent eventData, IReadOnlySet<string>? excludeTopLevelProperties = null)
     {
         var payload = new JsonObject
         {
@@ -170,7 +176,27 @@ internal sealed class MongoRawEventLogger
             ["Timestamp"] = DateTimeOffset.UtcNow.ToString("O")
         };
 
-        AddObjectProperties(payload, eventData, new HashSet<object>(ReferenceEqualityComparer.Instance), 0);
+        if (eventData is null)
+            return payload;
+
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        foreach (var property in eventData.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        {
+            if (property.GetMethod is null || property.GetMethod.GetParameters().Length > 0)
+                continue;
+            if (excludeTopLevelProperties is not null && excludeTopLevelProperties.Contains(property.Name))
+                continue;
+
+            try
+            {
+                payload[property.Name] = ObjectToNode(property.GetValue(eventData), visited, 1);
+            }
+            catch (Exception ex)
+            {
+                payload[property.Name] = $"<unavailable: {ex.GetType().Name}>";
+            }
+        }
+
         return payload;
     }
 

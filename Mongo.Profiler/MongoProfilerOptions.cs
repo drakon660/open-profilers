@@ -10,8 +10,9 @@ public sealed class MongoProfilerOptions
 
 public sealed class MongoProfilerRawEventOptions
 {
-    public bool Enabled { get; set; }
-    public string? DestinationDirectory { get; set; }
+    public bool Enabled { get; init; }
+    public string? DestinationDirectory { get; init; }
+    public bool EnableReplySerializing { get; init; }
 }
 
 public sealed class MongoProfilerIndexAdvisorOptions
